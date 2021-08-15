@@ -1,0 +1,533 @@
+---
+title: "Final_assignment"
+author: "YonatanLourie - NathanShapiro"
+date: "8/8/2021"
+output:
+    rmarkdown::github_document:
+    theme: journal
+    toc: true
+    toc_depth: 4
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+```
+
+## 1. Initialize
+
+
+
+### Libraries
+
+```{r, warning=FALSE, message=FALSE}
+library(tidyverse)      #Basically Everything
+library(ggfortify)      #PCA Plot
+library(ggpubr)         #Plots
+library(factoextra)     #Optimal K
+library(class)          #KNN
+library(caret)          #Model Training
+library(randomForest)   #Random Forest
+library(tuneRanger)     #Random Forest
+library(mlr)            #Random Forest
+library(OpenML)         #Random Forest
+
+
+set.seed(42)            #Reproducibility
+```
+
+
+### Load the data
+```{r}
+load('X_train.Rdata')
+load('X_test.Rdata')
+x_train <- data.frame(Xtrain1)
+x_test <- data.frame(Xtest)
+y_train <- read.csv('y_train.csv')
+y_test <- read.csv('y_test.csv')
+```
+
+
+### Inspect the data
+```{r}
+head(names(x_train),10)
+paste("Dimensions: ",dim(x_train)[1], "x", dim(x_train)[2])
+
+```
+
+
+**Results**
+We can see that our database is very big, with 3983 observations and 30002 parameters.
+
+
+
+## 2. Unsupervised Learning
+
+Because the database is so complex, we would need to preprocess it before applying any models to our data.
+The method we chose is PCA.
+
+Principal Component Analysis (PCA) is a technique which is widely used for applications such as dimensionality reduction. 
+PCA can be defined as the orthogonal linear transformation of the data to a lower dimensional linear space, known as the principal subspace, such that the greatest variance by any projection of the data comes to lie on the first coordinate (called the first principal component), the second greatest variance on the second coordinate, and so on. 
+Intuitively, PCA finds a meaningful coordinate basis to express our data.
+
+
+#### Apply PCA
+In order to save time for future computation we saved the results in a csv. file
+
+```{r, eval=FALSE}
+x_train <- prcomp(x_train, scale = TRUE, center = TRUE)
+
+write.csv(data.frame(x_train$x),"x_train$x.csv", row.names = FALSE)
+
+write.csv(data.frame(x_train$sdev),"x_train$sdev.csv", row.names = FALSE)
+
+
+#transform test to pca:
+x_test <- predict(x_train, newdata = x_test[,-c(1,2)])
+write.csv(data.frame(x_test$x),"x_test$x.csv", row.names = FALSE)
+
+```
+
+
+```{r}
+x_train <- read.csv("x_train$x.csv")
+x_train_sdev <- read.csv("x_train$sdev.csv")
+
+x_test <- read.csv("x_test$x.csv")
+
+```
+
+
+
+#### Observe Results
+
+```{r}
+paste("Dimensions: ",dim(x_train)[1], "x", dim(x_train)[2])
+```
+
+
+**Results**
+We can already see that by using PCA we were able to reduce the number of dimensions of our data without loosing significant data.
+
+
+
+```{r, cache=TRUE}
+plot(x_train[,1], x_train[,2], xlab="PC1", ylab="PC2",main="PCA", pch=20)
+```
+
+
+#### Explore variance of PC's
+Recall, that PCA turns the data to principal component where the first PC hold the most amount of variance explained, second PC the seonc greatest amount of variance and so on. We want to check, how much of the PC's are relevant so we can further reduce the complexity of data without compromising the results.
+
+
+```{r, cache=TRUE}
+set.seed(42)
+#compute standard deviation of each principal component
+std_dev <- x_train_sdev
+
+#compute variance
+pr_var <- std_dev^2
+
+#proportion of variance explained
+prop_var <- pr_var/sum(pr_var)
+
+pca_num <- c(1:3983)
+
+#plot the cumulative variance explained
+plot(pca_num,cumsum(prop_var)[,1], xlab = "Principal Component",
+              ylab = "Cumulative Proportion of Variance Explained",
+              type = "b")
+```
+
+
+
+**Results**
+
+We can see that every PC explains very little. Normally, the first few PC's should suffice. In our case, more is required.
+We decided that for our model, the explained variance by principal component of 80% should be sufficient.
+(There is no rule of thumb here. Some say less is adequate, some say more - because the computation was complex for this database, we chose a middle ground of 80% )
+
+#### Find optimal number of PC's
+```{r, cache=TRUE}
+set.seed(42)
+results <- data.frame(PCA =NA, var=NA)
+for (i in c(1:dim(x_train)[2])) {
+  ans <- sum(prop_var[1:i,1])
+  results <- rbind(results, c(i, ans))
+}
+results <- na.omit(results)
+rownames(results) <- results$PCA
+
+results.80 <- subset(results, var>0.798)
+opt_pc <- results.80[which.min(results.80$var),]
+
+
+opt_pc$PCA
+
+```
+
+
+**Results**
+Our optimal number of PC's for this model is `r opt_pc$PCA`
+
+
+#### Reduce model
+```{r}
+x_train<-x_train[,1:opt_pc$PCA]
+```
+
+
+#### K-Means model
+Since we want to use an unsupervised model for our initial classification - we chose to use K-Means. unsupervised machine learning is and algorithm that learns patterns from untagged data (meaning without a prediction/outcome).
+
+Kmeans algorithm is an iterative algorithm that tries to partition the dataset into K pre-defined distinct non-overlapping subgroups (clusters). It attemps to make the cluster data points as similar as possible while also keeping the clusters as different (far) as possible.
+
+
+#### Find optimal K
+```{r, cache=TRUE}
+set.seed(42)
+fviz_nbclust(x_train, FUN=kmeans, method="silhouette")
+
+```
+
+
+**Results**
+We can see by looking in the graph - that the optimal number of clusters is 'k=2'
+
+
+#### Run K-Means
+```{r, cache=TRUE}
+set.seed(42)
+opt_kmeans <- 2
+x_test_km <- kmeans(x_train, opt_kmeans, nstart = 25)
+
+```
+
+
+#### Plot K-Means
+```{r, cache=TRUE}
+plot(x_train[,1],x_train[,2], xlab = "PC1", ylab="PC2", main = "K means", pch=1, col=x_test_km$cluster+1)
+
+```
+
+
+**Results**
+We can see that our K-Means model was able to cluster the images into two groups. The separation is quite clear so we can see the model works pretty well. However, recall that our data can be separated into 3 nationalities. Let's see if we can cluster the data into 3 separate groups.
+
+#### Run K-Means
+```{r}
+set.seed(42)
+nation_kmeans <- 3
+x_test_km <- kmeans(x_train, nation_kmeans, nstart = 25)
+
+```
+
+#### Plot K-Means
+```{r, cache=TRUE}
+plot(x_train[,1],x_train[,2], xlab = "PC1", ylab="PC2", main = "K means", pch=1, col=x_test_km$cluster+1)
+
+```
+
+
+
+
+## 3. Supervised Classification Models
+
+
+Recall that for supervised learning, we need to be able to predict a certain outcome. Let's first build the outcome parameter (Y)
+
+**Important**
+We choose to continue our database classification with PCA. 
+Therefore, we are using the post-processed data that we previously created.
+
+
+#### Create prediction parameter
+
+```{r}
+##for final we need to change sy_train to regular y_train
+y_train <- y_train$x
+y_train <- data.frame(y=y_train)
+
+df_train <- as.data.frame(x_train)
+df_train$painters <- as.factor(y_train$y)
+
+#recall that we need the PCA in the x_test as the x_train:
+df_test<-x_test[,1:opt_pc$PCA]
+df_test$painters <- y_test[,2]
+
+```
+
+
+#### Create train/test sets
+
+```{r}
+
+train_labeled = df_train
+labels_train <- train_labeled$painters
+train = df_train[,1:length(df_train)-1]
+
+
+test_labeled = df_test
+labels_test <- test_labeled$painters
+test = df_test[,1:length(df_test)-1]
+
+```
+
+
+```{r, echo=FALSE}
+# Define variable containing url
+url <- "https://i1.wp.com/www.business-science.io/assets/2020-01-21-tune/nested_hyperparameter_tuning_process.jpg?zoom=1.25&w=578&ssl=1"
+```
+<center><img src="`r url`"></center>
+
+
+#### Hypertune KNN model
+
+K-Nearest Neighbors (PCA) is a supervised machine learning algorithm that can be used to solve both classification and regression problems.
+
+The KNN algorithm assumes that similar things exist in close proximity. In other words, similar things are near to each other. 
+In KNN algorithm: 
+Nearest neighbors are data points that have minimum distance in feature space from our new data point.
+K is the number of such data points we consider in our implementation of the algorithm. 
+Therefore, distance metric and K value are two important considerations while using the KNN algorithm. 
+In our case, we choose to use the Euclidean distance since it is considered to be the most reliable distance metric. All we have left to tune, is the K parameter.
+
+
+To select the K that’s right for our data, we run the KNN algorithm several times with different values of K and choose the K that reduces the number of errors we encounter while maintaining the algorithm’s ability to accurately make predictions when it’s given data it hasn’t seen before.
+
+We will test it with 10 cross validation:
+
+
+
+```{r,cache=TRUE}
+set.seed(42)
+KnnControl <- trainControl(method  = "cv", number  = 10)
+
+fit <- caret::train(painters~.,
+             method     = "knn",
+             tuneGrid   = expand.grid(k =1:50),
+             trControl  = KnnControl,
+             metric     = "Accuracy",
+             data       = train_labeled)
+
+
+
+fit_knn <- data.frame(fit$results)%>%
+                              arrange(desc(Accuracy))
+opt_k <- fit$bestTune[1,1]
+head(fit_knn,15)
+```
+
+
+We can see that the greatest accuracy is with k= `r fit_knn[1,1]` with accuracy of `r fit_knn[1,2]` %
+
+```{r, cache=TRUE}
+ggplot(data=fit_knn,aes(k, Accuracy)) +geom_point() +geom_line() + ggtitle("Accuracy plot") +geom_vline(xintercept = opt_k )
+
+```
+
+
+#### Hypertune Random Forest
+
+
+Random forest is a supervised learning algorithm. Just like KNN, it can be used for classification and regression problems.
+The "forest" it builds, is an ensemble of decision trees. It generates multiple decision trees with different various and finds the best one. Because of this, it can work with very complex data and still yield high accuracy rate. It is considered to be a highly accurate model and for this reason we would like to use it for our problem.
+
+Random forest has a lot of different parameters to hypertune. 
+However, even without tuning them it can yield impressive results. For our tuning, we chose to focus on three key parameters:
+
+*mtry*: Number of variables randomly sampled as candidates at each split.
+*ntree*: Number of trees to grow.
+*sample size*: Number of observations that are drawn for each tree.
+
+**Important**
+
+After reading the article [Hyperparameters and Tuning Strategies for Random Forest](https://arxiv.org/pdf/1804.03515.pdf), we decided in this case not to use the cross validation method and to use the out-of-bag observations.
+
+
+Hyperparameters and Tuning Strategies for Random Forest, 
+3.2 Evaluation strategies and evaluation measures:
+
+"""... A typical strategy to evaluate the performance of an algorithm with different values of the hyperparameters in the
+context of tuning is k-fold cross-validation. The number k of folds is usually chosen between 2 and 10. Averaging the
+results of several repetitions of the whole cross-validation procedure provides more reliable results as the variance of the estimation is reduced (Seibold et al., 2018).
+In RF (or in general when bagging is used) another strategy is possible, namely using the out-of-bag observations
+to evaluate the trained algorithm. Generally, the results of this strategy are reliable (Breiman, 1996), i.e., approximate
+the performance of the RF on independent data reasonably well. A bias can be observed in special data situations
+(see Janitza and Hornung, 2018, and references therein), for example in very small datasets with n < 20, when there
+are many predictor variables and balanced classes. Since these problems are specific to particular and relatively rare
+situations and tuning based on out-of-bag-predictions has a much smaller runtime than procedures such as k-fold
+cross-validation (which is especially important in big datasets), we recommend the out-of-bag approach for tuning as
+an appropriate procedure for most datasets. """
+
+
+#### Create control case
+We will start by creating a Random forest model by using the recommended defaults. This will help us understand the improvement we gain by tuning them later.
+
+
+```{r, cache=TRUE}
+
+control <- trainControl(method="repeatedcv", number=10, repeats=3)
+metric <- "Accuracy"
+mtry <- sqrt(ncol(train))
+tunegrid <- expand.grid(.mtry=mtry)
+rf_default <- caret::train(painters~., data=train_labeled, method="rf", metric=metric, tuneGrid=tunegrid, trControl=control)
+print(rf_default)
+
+```
+
+We can see that with CV we got accuracy of `r rf_default$results$Accuracy`.
+Lets try to make it better by changing the parameters of the model and by using the TuneRF algorithm.
+
+
+
+I will use the method that presented in the [article](https://arxiv.org/pdf/1804.03515.pdf):
+
+
+The function simultaneously tunes the three parameters mtry, sample size and node size. 
+mtry values are sampled from the space [0, p] with p being the number of predictor variables, while sample size values are sampled from [0.2 · n, 0.9 · n] with n being the number of observations. Node size values are sampled with higher
+probability (in the initial design) for smaller values by sampling x from [0, 1] and transforming the value by the
+formula [(n·0.2)x]. 
+
+
+
+```{r,eval=FALSE}
+monk_data_1 = train_labeled
+monk.task = makeClassifTask(data = monk_data_1, target = "painters")
+
+# This is a hard task, this is the time estimation:
+estimateTimeTuneRanger(monk.task)
+
+# Tuning
+res = tuneRanger(monk.task, measure = list(acc), num.trees = 2000,
+num.threads = 2, iters = 70, iters.warmup = 30)
+
+
+# Ranger Model with the new tuned hyperparameters
+res$results
+
+#saving the results in csv file in order not to run tuning again.
+csv_file <- res$results %>%
+            arrange(desc(acc))
+
+write.csv(csv_file,"RF_results.csv", row.names = FALSE)
+
+```
+
+
+```{r}
+RF_results <- read.csv("RF_Results.csv")
+
+optmtry = RF_results[1,1]
+node.size = RF_results[1,2]
+optm_smpl_size <- RF_results[1,3] 
+
+head(RF_results,15)
+```
+
+
+**Results**
+We can see that got better accuracy with the TuneRF alogrithm.
+
+
+Now that we hypertuned both models, let us run them with their optimized parameters and compare the results.
+
+
+#### Run Models
+```{r, cache=TRUE}
+# K-nearest neighbors
+trControl <- trainControl(method  = "cv",
+                          number  = 5)
+
+knn <- caret::train(painters~.,
+             method     = "knn",
+             tuneGrid   = expand.grid(k =opt_k),
+             trControl  = trControl,
+             metric     = "Accuracy",
+             data       = train_labeled)
+
+
+```
+
+
+```{r, cache=TRUE}
+# Random forest
+rf <- randomForest(painters  ~ .,
+  data=train_labeled,mtry=optmtry, node_size= node.size,ntree=round(optm_smpl_size*nrow(train_labeled)))
+
+
+```
+
+
+#### KNN Results
+```{r}
+predicted_outcomes_knn <- predict(knn, test)  %>% as.factor
+knn_confm <- confusionMatrix(predicted_outcomes_knn, as.factor(labels_test))
+knn_confm
+
+paste("KNN Model results: ",knn_confm$overall[1])
+
+```
+
+We got here accuracy of `r knn_confm$overall[1]`.
+
+#### KNN Confusion Matrix
+```{r}
+plot_knn <- as.data.frame(knn_confm$table)
+plot_knn$Prediction <- factor(plot_knn$Prediction, levels=rev(levels(plot_knn$Prediction)))
+
+p1 <- ggplot(plot_knn, aes(Prediction,Reference, fill= Freq)) +
+  geom_tile() + geom_text(aes(label=Freq)) + theme(legend.position = "None") +
+  ggtitle("Knn")
+
+p1
+```
+
+
+#### RF Results
+```{r}
+predicted_outcomes_rf <- predict(rf, test, type="class")  %>% as.factor
+rf_confm <- confusionMatrix(predicted_outcomes_rf, as.factor(labels_test))
+rf_confm
+paste("RF Model results: ",rf_confm$overall[1])
+
+```
+
+We got here accuracy of `r rf_confm$overall[1]`.
+
+#### Random Forest Confusion Matrix
+```{r}
+
+plot_rf <- as.data.frame(rf_confm$table)
+plot_rf$Prediction <- factor(plot_rf$Prediction, levels=rev(levels(plot_rf$Prediction)))
+
+p2 <- ggplot(plot_rf, aes(Prediction,Reference, fill= Freq)) +
+  geom_tile() + geom_text(aes(label=Freq)) + theme(legend.position = "None") +
+  ggtitle("Random Forest")
+p2
+```
+
+
+
+```{r}
+ggarrange(p1+theme(axis.text.x=element_text(angle=90,hjust=1)),p2+theme(axis.text.x=element_text(angle=90,hjust=1)))
+```
+
+
+
+## Summary
+
+Firstly, we can see that both models produced a result of 30ish% accuracy. The results aren't superb, but we need to keep in mind that classification of pictures and objects is an arduous task and requires a lot of time and a big data set. In our opinion, this results are adequate enough.
+
+Looking at the confusion matrices, we need to observe the diagonal line. The diagonal line indicates whether or not our prediction is correct. 
+In our case, we have a higher accuracy with the Random Forest model.
+
+The confusion matrices can also tell us where the model did not perform well and "got confused".
+
+The KNN algorithm was successful with Pissarro and Monet. However, it mixed Matisse to be Monet and Hassam to be Monet as well. The rest of painters were classified decently.
+
+The RF algorithm was more successful and we can see a bolder diagonal line which indicates the model was correct more often. It was able to predict pretty well almost all the painters except Matisse, Hassam (which the KNN struggled as well).
+However, we can see that despite the confusion, the RF predict more outcomes truthfully and therefore the to be the better model.
+
