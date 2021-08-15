@@ -1,0 +1,302 @@
+---
+title: "quiz2"
+author: "YonatanLourie-MatanPolke"
+date: "6/3/2021"
+output:
+    rmarkdown::github_document:
+    theme: journal
+    toc: true
+    toc_depth: 4
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+```
+
+
+```{r, message=FALSE, results==hide, warning=FALSE}
+library(tidyverse)
+library(corrplot)
+library(olsrr)
+library(ggpubr)
+
+```
+
+## 1
+
+```{r}
+df <- read.csv("quiz2_df.csv")
+df[,c(-1,-2)] <- lapply(df[,c(-1,-2)], scale)
+head(df)
+```
+
+```{r}
+sapply(df, var)
+round(sapply(df, mean),5)
+```
+### 9 
+#### a. Pearson correlation
+First, we can check in the most naive way, with the correlation matrix.
+```{r}
+corrplot(cor(df[,-2]), order = "hclust")
+```
+We can see clearly what we have a negative correlation of (Y, X3), (X3, X7).
+Also we can see a positive correlation of (Y, X7), (X5, X6).
+
+#### b. $R^2_j$ method
+But correlation matrix is good just for pairs of variables, when we deal with multiple variables we need to think about a multicolliniety between a few variables at once.
+Lets implement the VIF method.
+$VIF = \frac{1}{1 - {R}^{2}_{k}} = \frac{1}{Tolerance}$
+We will regress the kth predictor on rest of the predictors in the model, and then we will compute the $R^2$ of each one of the regressor.
+By that we can indicate how much correlation each regressor have with all the other $X's$.
+Recall that we wish to get higher Tolerance ($1-R^2$) because high $R^2$ means that we can explain pretty the outcome with the regressor, and because the outcome is one of the regressors, it indicate on high correlation.
+(Of course that we wish to get smaller VIF becasue its the inverse).
+
+```{r}
+model <- lm(Y~., data=df)
+arrange(ols_vif_tol(model), -VIF)
+```
+We can see that most "problematic" variables are X6, X5, X7, X3.
+But we have a problem in this method also as well. 
+The $R^2$ indicator is good for linear correlations, and recall that this insicator gets better with the number of regressors (for that we can use the Adjusted $R^2$ method).
+
+#### c. Condition indices & Condition number
+In this method we wish to calculate the square root of the ratio of the maximum eigenvalue to each eigenvalue from the correlation matrix of standardized explanatory variables (is referred to as the condition index (The condition index). 
+The condition number is the maximum condition index.
+The condition index that fits to the eigenvector $u_k$ of $X^TX$ is:
+$\alpha_{k}:=\left(\frac{\lambda_{\max }\left(\boldsymbol{X}^{\top} \boldsymbol{X}\right)}{\lambda_{k}\left(\boldsymbol{X}^{\top} \boldsymbol{X}\right)}\right)^{1 / 2}$
+
+
+```{r}
+model <- lm(Y~.-X0, data=df)
+
+round(ols_eigen_cindex(model),3)
+
+```
+We can see that where the condition index is high (and the eigenvalue is low), we have an indication for a high correlation. When we look at the eigenvectors (the rows of X1-X7) at the highest condition index (20.144), We can see that (X5, X6) have a high correlation like we found when we did the pearson correlation. But now we can see that X1 and X4 also have some (small) impact on the correlation.
+For condition index 10.19 we have high correlation of (X3, X7).
+Recall that every column will sum to 1 and that the column is showing the porportional variance of $\beta_j$.
+
+### 10 
+
+
+
+```{r}
+sigma_sq <- 2 # true sigma squared
+beta <- c(3.155678, -2.967792, 5.6823762, -9.4346238, -3.7229186, 0.8544212, -1.4265823, 10.4009092) # true beta vector
+lambda_seq <- seq(10^{-4},1,length.out = 200) # lambda sequence to try
+# lambda_seq <- seq(10^{-4},1,length.out = 200) # lambda sequence to try
+lambda_seq_mod <- seq(10^{-4},10^5,length.out = 200)
+
+ridge_aux_functions <- function(X, Y, lambda, sigma_sq, beta_true){
+  #' @param X is the X data frame/matrix
+  #' @param Y is the Y variable
+  #' @param lambda is the ridge penalty parameter
+  #' @param sigma_sq is the true model sigma squared
+  #' @param beta_true is the true model beta vector
+  X <- as.matrix(X)
+  Y <- as.matrix(Y)
+  beta_true <- as.matrix(beta)
+  lambda_diag <- lambda*diag(dim(X)[2])
+  beta_ridge <- solve(t(X)%*%X+lambda_diag) %*%t(X)%*%Y
+  A <- solve(t(X) %*% X+lambda_diag) %*% t(X) %*% X
+  bias_ridge <- (A %*% beta_true - beta_true)
+  var_ridge <- sigma_sq %*% sum(diag(A %*% solve(t(X)%*%X) %*% t(A)))
+  mse_ridge <- var_ridge + t(bias_ridge)%*%bias_ridge # from q 8.
+  
+  beta_ols <- solve(t(X) %*% X) %*% t(X)%*%Y
+  A <- solve(t(X) %*% X) %*% t(X) %*% X
+  bias_ols <- (A %*% beta_true - beta_true)
+  var_ols <- sigma_sq %*% sum(diag(A %*% solve(t(X)%*%X) %*% t(A)))
+  mse_ols <- var_ols + t(bias_ols)%*%bias_ols # from q 8.
+  return(list(lambda = lambda, mse_ridge = mse_ridge, mse_ols = mse_ols))
+}
+
+X <- as.matrix(df[,-1])
+Y <- df["Y"]
+```
+
+### 11
+
+```{r}
+res.est <- data.frame(lambda=NA, MSE_ridge=NA, MSE_ols=NA)
+for (lambda in lambda_seq) {
+  tmp <- c(ridge_aux_functions(X,Y, lambda,sigma_sq, beta))
+  tmp <- unlist(tmp)
+  
+  res.est <- rbind(res.est, tmp)
+}
+res.est <- arrange(na.omit(res.est), lambda)
+
+resPlot <- res.est %>%
+  select(lambda, MSE_ridge, MSE_ols) %>%
+  gather(key = "variable", value = "value", -lambda)
+ggplot(resPlot, aes(x = lambda, y = value)) + 
+  geom_line(aes(color = variable, linetype = variable)) + 
+  scale_color_manual(values = c("darkred", "steelblue")) +ylab("MSE")
+
+
+```
+
+We can observed that the MSE of $E[(\hat{Y}-Y)^2]$ is getting lower when the lambda is getting higher, which means the model prediction is improved (less error) to a certain point.
+When $\lambda = 0 $ then the ridge $||b||^2$ have no imapct to their MSE's are alike.
+but!
+
+```{r}
+lambda_seq <- seq(10^{-4},10,length.out = 200) # lambda sequence to try
+
+res.est <- data.frame(lambda=NA, MSE_ridge=NA, MSE_ols=NA)
+for (lambda in lambda_seq) {
+  tmp <- c(ridge_aux_functions(X,Y, lambda,sigma_sq, beta))
+  tmp <- unlist(tmp)
+  
+  res.est <- rbind(res.est, tmp)
+}
+res.est <- arrange(na.omit(res.est), lambda)
+
+resPlot <- res.est %>%
+  select(lambda, MSE_ridge, MSE_ols) %>%
+  gather(key = "variable", value = "value", -lambda)
+ggplot(resPlot, aes(x = lambda, y = value)) + 
+  geom_line(aes(color = variable, linetype = variable)) + 
+  scale_color_manual(values = c("darkred", "steelblue")) +ggtitle("E[(Y.hat-Y)^2]")
+
+```
+When we will try to implement a larger set of lambdas, we cab see that their is a minimum value of MSE and from that poing the MSE is only getting bigger.
+As $\lambda$ increases, the flexibility of the ridge regression fit decreases, leading to decreased variance but increased bias.
+So in any ridge regression, we need to find the best lambda the minize the error (when the bias-variance tradeoff is for the best). after that lambda, the bias is increasing.
+In our case, the best lambda is:
+```{r}
+min(res.est$MSE_ridge)
+```
+
+### 12 
+```{r}
+
+ridge_aux_functions2 <- function(X, Y, lambda){
+  X <- as.matrix(X)
+  Y <- as.matrix(Y)
+  xtx <- solve(t(X) %*% X)
+  lambda.diag <-  lambda *diag(dim(X)[2])
+  betas.ridge <- solve(t(X) %*% X + lambda.diag) %*% t(X) %*% Y
+  ans <- data.frame(lambda = rep(lambda, length(betas.ridge)),betas_index = c(1:length(betas.ridge)), betas_value = betas.ridge)
+  
+  return(ans)
+}
+
+
+res2 <- data.frame(lambda=NA, beta.index=NA, beta.val=NA)
+for (lambda in lambda_seq_mod) {
+  tmp <- c(ridge_aux_functions2(X,Y, lambda))
+  names(tmp) <- c("lambda", "beta.index", "beta.val")
+  res2 <- rbind(res2, tmp)
+}
+res2 <- na.omit(res2)
+res2$beta.index <- as.factor(res2$beta.index-1)
+res2
+
+ggplot(res2, aes(x=lambda, y=beta.val, col=beta.index)) + geom_line()
+#and plot without the intercept
+ggplot(subset(res2, beta.index != 0), aes(x=lambda, y=beta.val, col=beta.index)) + geom_line()
+```
+We can see that when the lambda is bigger, our betas is converge to zero (almost to zero). The ridge regression will penalize our coefficients, such that those that are the least effective in our estimation will "shrink" the fastest.
+Our best betas is those that converge to zero "the slowlest". Which means that our best predictors should be $\beta_{3,7,2}$.
+
+
+## 2
+
+```{r}
+df <- read.csv("eagles_sim.csv")
+head(df)
+```
+
+### 1
+```{r}
+ggplot(df, aes(x, y))  + geom_point()+
+  geom_smooth()
+```
+Because of the exponential hint, we can try to do a $ln(y)$ transformation on $Y$:
+```{r}
+df_ <- df
+df_$z <- log(df$y)
+before <- ggplot(df, aes(x, y))  + geom_point()+
+  geom_smooth()
+after <- ggplot(df_, aes(x, z))  + geom_point()+
+  geom_smooth()
+
+figure <- ggarrange(before, after, ncol = 2, nrow = 1, lables=c("Before", "After"))
+figure[1]
+
+```
+Looks pretty fine, but to be sure - let's check a few indicators of the linear model:
+
+### 2
+
+```{r}
+PlotLm <- function(x,y) {
+  fm <- lm(y~x)
+  sig.hat <- sigma(fm)
+  Y.hat <- fitted(fm)
+  X.mat <- model.matrix(fm)
+  P <- X.mat %*% solve( t(X.mat) %*% X.mat ) %*% t(X.mat)
+  e <- fm$residuals
+  r <- e/(sig.hat * sqrt(1-diag(P)) )
+  
+  qq <- ggplot(data.frame(e), aes(sample = e)) + stat_qq() + geom_qq_line(col = "red", lwd = 1)
+  histo <- ggplot(data.frame(r),aes(x=r)) + geom_histogram(aes(y=..density..), alpha = 0.8, bins = 10) +
+  stat_function(fun = dnorm, args = list(mean = 0, sd = 1), col="red", lwd = 1)
+  yHatR <- ggplot(data.frame(Y.hat,r), aes(x=Y.hat, y= r)) + geom_point()
+  X_R <- ggplot(data.frame(x,r), aes(x=x, y= r)) + geom_point()
+  figure <- ggarrange(qq, histo, yHatR, X_R,
+                      ncol = 2, nrow = 2)
+  figure
+}
+
+PlotLm(df_$x,df_$z)
+```
+
+We can see that we havnt got the best linear model, but is better from before.
+We can see in the scatter plot we have pretty random scatter with a few outliers. the qqplot is better with heavy tails.
+The main problem here that we dont have alot of data.
+
+
+The older model indicators:
+```{r}
+PlotLm(df$x,df$y)
+```
+
+
+
+
+### 3
+For x=27:
+
+```{r}
+model2 <- lm(z~x, df_)
+summary(model2)
+coeff <- round(model2$coefficients,3)
+```
+
+So we wish to calculate: $ln(y)= {`r coeff[1]`}+27*({`r coeff[2]`})$
+The predict.lm calculates predicted values, with the prediction interval [predicted_values, lower, upper].
+Recall that:
+ $Z = ln(y)$
+ For convinience:
+ $\hat{Y^{*}}=Z=\hat{\beta}X^{(*)}$
+ We showed in class that:
+ $E(Y^*)=E(\hat{Y^*})$, and that: $Var(Y^*)= \sigma^2,\ Var(\hat{Y^*})=\sigma^2X^{*T}(X^tX)^{-1}X^{*}$(The cov is 0).
+ Thus, we concluded that: $Y^*-\hat{Y^*}\sim N(0, \sigma^2(1+X^{(*)T}(X^tX)^{-1}X^{(*)})$
+ 
+Because our transformation is linear, and by our linear model assumptions, our results should be the inverse of our function: $ln(y) \rightarrow exp(x)$ so our PI will be $[e^{lower}, e^{upper}]$
+
+```{r}
+
+prediction <- exp(predict.lm(model2, list(x=(27)), interval="prediction", level = 0.9))
+prediction
+```
+Our predicted value for x=27 is `r exp(prediction[1])` pairs of eagles,
+and the PI is [`r exp(prediction[2])`,`r exp(prediction[3])`] with 90 % confidence.
+
