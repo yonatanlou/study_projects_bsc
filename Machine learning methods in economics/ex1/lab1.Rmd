@@ -1,0 +1,340 @@
+---
+title: "lab1"
+author: "Yonatan-Lourie"
+date: "4/15/2021"
+output:
+    rmarkdown::github_document:
+    theme: journal
+    toc: true
+    toc_depth: 3
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+       
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+```{r, message=FALSE, results==hide, warning=FALSE}
+
+library(magrittr)
+library(haven)
+library(Hmisc)
+library(tidyverse)
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+library(stargazer)
+library(plyr)
+
+```
+
+## Lab \#1 -- Regression Analysis
+
+### 1
+
+```{r}
+set.seed(42)
+df <-  read.csv("CAhousing.csv")
+```
+
+### 2
+
+```{r}
+#a
+dim(df)
+```
+
+```{r}
+#b
+summary(df)
+```
+
+```{r}
+#d
+#correlation matrix
+data.frame(round(cor(df),2))
+
+#checking the connections
+z=as.data.frame(as.table(round(cor(df),2)))  
+z=na.omit(z)  
+z=z[order(-abs(z$Freq)),]  
+subset(z, z$Freq!=1)
+```
+
+We can see in the table above the highest correlations.
+
+### 3
+
+We can see by the plot that we have some correlation between the variables. (when x increasing, y also as well)
+
+```{r}
+#a
+
+ggplot(df, aes(medianIncome, medianHouseValue)) + geom_point()
+
+```
+
+```{r}
+#b
+Y <- df$medianHouseValu
+X <- df$medianIncome
+reg.model <- lm(Y~X)
+#c
+summary(reg.model)
+```
+
+The regression coefficients are `r reg.model$coefficients`
+
+We can see the the $R^2$ value is 0.4734 which is saying how much we can describe the error.
+
+```{r}
+#d
+plot(reg.model)
+```
+
+```{r}
+#e
+beta_0 <- reg.model$coefficients[1]
+beta_1 <- reg.model$coefficients[2]
+predictions <- beta_0 +beta_1*X
+
+#predict(reg.model, df)
+```
+
+```{r}
+#f
+df %>%
+  ggplot(aes(x=medianIncome,y=medianHouseValue)) +
+  geom_point(alpha=0.5) +
+  labs(x= "Median income", y="Median house value")+
+  geom_smooth(method=lm) + ylim(0,500000)
+```
+
+Its seems like a good fit but with very big variance.
+
+### 4
+
+```{r}
+#1
+hist(df$medianHouseValue, breaks = 100)
+```
+
+It looks like there is alot of houses with the same price (500,000), which is a bit strange - because houses can be priced for alot of reasons but `r dim((subset(df, df$medianHouseValue %in% c(500000,500001))))[1]` with the same price its an anomaly .
+
+```{r}
+#2
+reg.model.all <- lm(Y~.,df[, c(1:length(df)-1)] )
+summary(reg.model.all)
+```
+
+```{r}
+#3
+Y.corr <- data.frame(round(cor(df),2))
+Y.corr[order(Y.corr$medianHouseValue),][9]
+
+```
+
+its looks like we can omit the latitude, longitude, population, totalbedrooms (just from the corr).
+
+But when we'll look at the coefficients impact - we will observe that the longitude, latitude, housingMedianAge and medianIncome have the most impact on Y variable.
+
+```{r}
+plot(reg.model.all)
+```
+
+## Lab \#2 -- KNN Analysis
+
+### 1
+
+```{r}
+library(ISLR)
+library(class)
+```
+
+### 2
+
+```{r}
+dat <- Default
+```
+
+### 3
+
+```{r}
+#a
+dim(dat)
+```
+
+```{r}
+#b
+summary(dat)
+```
+
+Its looks like there is alot of students with 0 balance which looks like an anomalie:
+
+```{r}
+ggplot(dat, aes(x=balance)) + geom_histogram()
+```
+
+```{r}
+#c
+help(Default)
+
+#d
+sd(dat$balance)
+sd(dat$income)
+```
+
+We can obviously see that the variables arent standardized (if the variables were standardized we would expect a standard deviation of a smaller number)
+
+### 4
+
+```{r}
+#a
+data <- dat[c("balance", "income", "default")]
+
+#b
+data$balance <- scale(data$balance)
+data$income <- scale(data$income)
+
+#c
+sample <- sample.int(n = nrow(data), size = floor(.7*nrow(data)), replace = F)
+train <- data[sample, ]
+test  <- data[-sample, ]
+
+X_train <- train[c("balance", "income")]
+X_test <- test[c("balance", "income")]
+
+Y_train <- train$default
+Y_test <- test$default
+
+
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+
+
+#d+e
+for (k in c(1,5,20,70)) {
+  knn.model <- knn(train = X_train, test = X_test, cl = Y_train, k = k)
+  tab <- table(knn.model, Y_test)
+  accuracy_ <- accuracy(tab)
+  print(paste0("accurcy for k = ", k, "is: ", accuracy_ ))
+  print(paste0("frequency table for k = ", k))
+  print(tab)
+  
+  print(paste0("porportion table for k = ", k))
+  print(round(prop.table(tab,2),3))
+  print("---------------------------------")
+}
+
+
+```
+
+### 5
+
+```{r}
+freqY_train <- table(Y_train)
+propY_train <- prop.table(table(Y_train))
+propY <- prop.table(table(data$default))
+print("frequency of the default variable in the training set:")
+print(freqY_train)
+writeLines("\n")
+
+print("proportion of the default variable in the training set:")
+print(propY_train)
+writeLines("\n")
+
+print("proportion of the default variable in the whole dataset:")
+print(propY)
+writeLines("\n")
+
+```
+
+We can see in the data that the proportion of the whole dataset is pretty similar to the train dataset.
+
+I think that a Naive Bayes classifier will work pretty good here, and for any more data that we will append to the dataset, we will get more accurate results.
+
+## Lab \#3 -- Kernel Regression
+
+### 1 Split CAhousing.csv into random train (80%) and test (20%) sets.
+
+```{r}
+library(dplyr)
+df <-read.csv("CAhousing.csv")
+df<-data.frame(scale(df[c("medianHouseValue","medianIncome")]))
+train <- sample_frac(df, 0.8)
+sid<-as.numeric(rownames(train)) # because rownames() returns character
+test<-df[-sid,]
+```
+
+### Use the "ksmooth" function from the stats library in order to predict the median house value from CAhousing.csv, using only the best predictor variable.
+
+```{r}
+X_train <- train$medianIncome
+Y_train <- train$medianHouseValue
+
+X_test <- test$medianIncome
+Y_test <- test$medianHouseValue
+
+KsmoothDataframe <- function(kernel, X_train, Y_train, Y_test, h) {
+  pred1 <- ksmooth(X_train, Y_train, kernel= kernel, bandwidth = h)
+  train_MSE <- mean((Y_train - pred1$y)^2)
+  test_MSE <- mean((Y_test - pred1$y)^2)
+  pred_data<- data.frame(kernel=kernel,h=h, x_pred=pred1$x,y_pred=pred1$y)
+  test_data <- data.frame(kernel=kernel, h=h, train_MSE=train_MSE, test_MSE=test_MSE)
+  ans <- list(pred_data, test_data)
+  return(ans)
+}
+
+prediction_data <- data.frame(kernel = NA, h = NA, x_pred=NA,y_pred=NA)
+testing_data <- data.frame(kernel = NA, h = NA, train_MSE = NA, test_MSE = NA)
+
+
+for (h in c(1,3,5,20)) {
+  for (k in c("box", "normal")) {
+    processed_data <- KsmoothDataframe(k, X_train, Y_train, Y_test, h)
+    pred_data1 <- processed_data[1]
+    test_data <- processed_data[2]
+    prediction_data <- rbind(data.frame(prediction_data), data.frame(pred_data1))
+    testing_data <- rbind(data.frame(testing_data), data.frame(test_data))
+  }
+  # print(h)
+} 
+
+```
+
+Recall that that the box kernel is: $K(u)=\frac{1}{2}$ and the Gaussian kernel is: \$\$ P(x) = \frac{1}{{ \sqrt {2\pi } }}e^{^\frac{-1}{2}u{2}}
+
+\$\$
+
+### MSE summary
+
+```{r}
+testing_data <- na.omit(testing_data)
+testing_data$train_MSE <- testing_data$train_MSE
+testing_data$test_MSE <-testing_data$test_MSE
+print(testing_data <- testing_data[order(testing_data$test_MSE),])
+```
+
+We can see that when the h is higher - the MSE is lower. The type of the kernel is better with the Gaussian (Except from when the h is large).
+
+```{r}
+prediction_data <- prediction_data%>%filter(h %in% testing_data$h )
+prediction_data$X <- X_train
+prediction_data$Y <- Y_train
+#plot the data, and the diffrent h impact per every kernel.
+ggplot(prediction_data,aes(x=X ,y=Y,col="data"))+
+  geom_point(aes(alpha= 0.2, ), colour = 'Gray')+
+  geom_line(aes(x=x_pred,y=y_pred,col=as.factor(h)),size= 1)+
+  facet_grid(~kernel)+ #making plot for every kernel
+  xlab("Median Income")+ylab("Median House Value")+
+  guides(fill=guide_legend(title="h-val"))
+```
+
+The main diffrence between the kernels is that the normal kernel is smoother the the box kernel (mainly when we have less data) and it stems from the kernel function of each on of them. In both kernels when the value of h is rising, the regression line is getting closer to the average of the Y axis.
+
+We know that when the h is getting bigger, the variance will be bigger and the bias will get smaller (the variance - bias tradeoff). So the decreasing of the bias is making the regression line closer to the Y axis.
+
+We can see that in the right top corner in the box plot, we have over fitting (due to low h and high variance of the data) but when the h is getting bigger it seems that the overfitting is diminished.
+
+We also can observed that we have an edge solution - when the h is very big, the MSE is getting smaller.
