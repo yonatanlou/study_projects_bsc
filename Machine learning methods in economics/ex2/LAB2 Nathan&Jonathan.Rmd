@@ -1,0 +1,373 @@
+---
+title: "LAB2"
+author: "Yonatan-Lourie, Nethnel Shapiro"
+date: "4/25/2021"
+output:
+    rmarkdown::github_document:
+    theme: journal
+    toc: true
+    toc_depth: 3
+    df_print: paged
+---
+
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+knitr::opts_chunk$set(warning=FALSE)
+
+```
+
+```{r, message=FALSE, results==hide, warning=FALSE}
+library(magrittr)
+library(haven)
+library(Hmisc)
+library(tidyverse)
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+library(stargazer)
+library(plyr)
+library(ri)
+library(glmnet)
+library(plotmo)
+```
+
+## Excersice 1
+
+### 1-5.
+```{r}
+load("CA_samp.Rdata")
+df <- data.frame(CA_samp)
+set.seed(150)
+```
+
+```{r}
+cat(paste(c("The size of the data is: ", dim(df))), collapse="")
+```
+
+We can see that the database has many variables. If we will use all of them, it might cause the model to 'overfit' the data. This will give us a good result for this set of data - but arguably it will work for a different one.
+If we will omit variables that have smaller impact on $Y$ we can reduce our variance and improve the performance of the model.
+
+
+### 6-7.
+Subset your data into train and test
+```{r}
+
+sample <- sample.int(n = nrow(df), size = floor(.8*nrow(df)), replace = F)
+train <- df[sample, ]
+test  <- df[-sample, ]
+
+X_train <- train[, -which(names(train) == "medianHouseValue")]
+X_test <- test[, -which(names(train) == "medianHouseValue")]
+
+Y_train <- train[, which(names(train) == "medianHouseValue")]
+Y_test <- test[, which(names(train) == "medianHouseValue")]
+
+```
+
+### 8.
+
+#### a
+Recall that $\alpha=0$ means the regression is Ridge typed and $\alpha=1$ means the regression is Lasso typed.
+```{r}
+
+fit.lasso <- glmnet(X_train, Y_train, family="gaussian", alpha=1, standardize = TRUE)
+fit.ridge <- glmnet(X_train, Y_train, family="gaussian", alpha=0, standardize = TRUE)
+```
+
+```{r}
+class(fit.lasso)
+class(fit.ridge)
+```
+
+
+#### b
+Find which lambdas were used in the evaluation of each model
+```{r}
+lambdas.lasso <- fit.lasso$lambda
+lambdas.ridge <- fit.ridge$lambda
+
+
+df.lasso <- fit.lasso$df
+df.ridge <- fit.ridge$df
+
+diff <- length(lambdas.ridge)-length(lambdas.lasso)
+LassoRidgeData <- data.frame(LambdasLasso = c(lambdas.lasso, rep(NA,diff)), LambdasRidge = lambdas.ridge, coeffLasso = c(df.lasso,rep(NA,diff)), coeffRidge = df.ridge)
+
+LassoRidgeData
+```
+
+```{r}
+print("Lasso coef summary:")
+summary(df.lasso)
+print('')
+print("__________________________________________")
+print("Ridge coef summary:")
+summary(df.ridge)
+```
+
+#### c
+Check how many non-zero coefficients were computed for each lambda.
+```{r}
+diff <- length(lambdas.ridge)-length(lambdas.lasso)
+LassoRidgeData <- data.frame(LambdasLasso = c(lambdas.lasso, rep(NA,diff)), LambdasRidge = lambdas.ridge, coeffLasso = c(df.lasso,rep(NA,diff)), coeffRidge = df.ridge)
+
+LassoRidgeData
+
+count(df.lasso!=0)
+
+count(df.ridge!=0)
+```
+
+We can see at the dataframe above, that for every lambda of the Ridge model we have 528 non-zero coefficients. 
+On the other hand, the Lasso model is much more flexible and the coefficients vary much more.
+
+#### d
+plot the coefficients as a function of lambda
+```{r}
+par(mfrow=c(1,2))
+plot(fit.lasso, xvar="lambda", main="Lasso model")
+plot(fit.ridge, xvar="lambda", main="Ridge model")
+```
+In the top X-axis we can see the number of non-zero coefficients, bottom X-axis stands for $log(\lambda)$,
+each line is representing another variable from X, and the Y axis is indicate about the value of each coefficient.
+
+
+### 9. 
+#### a
+Run cv.glmnet() for cross-validation and choose the number of folds for the CV
+```{r}
+#Ridge
+fit10.ridge <- cv.glmnet(as.matrix(X_train), as.matrix(Y_train), type.measure="mse", alpha=0,family="gaussian", nfolds=10)
+
+#Lasso
+fit10.lasso <- cv.glmnet(as.matrix(X_train), as.matrix(Y_train), type.measure="mse", alpha=1,family="gaussian", nfolds=10)
+
+```
+#### b
+Extract the lambda that minimizes the cross-validation error
+```{r}
+print(paste0("The lambda that minimizes the cross-validation error is (for ridge):", fit10.ridge$lambda.min))
+
+print(paste0("The lambda that minimizes the cross-validation error is (for lasso):", fit10.lasso$lambda.min))
+```
+
+#### c
+Plot both models
+```{r}
+par(mfrow=c(2,1))
+plot(fit10.lasso, main="Lasso")
+plot(fit10.ridge, main="Ridge")
+```
+
+This plots the cross-validation curve (red dotted line) along with upper and lower standard deviation curves along the $log(\lambda)$ sequence (error bars). The vertical dotted line indicate the min lambda that we calculated before (there are 2 one for lambda.min and one for lambda.1se).
+
+### d
+Predict the median house value of the test set using the lambda that minimizes the cross-validation error
+```{r}
+Y.hat.lasso <- predict(fit10.lasso, as.matrix(X_test), s=fit10.lasso$lambda.min)
+Y.hat.ridge <- predict(fit10.ridge, as.matrix(X_test), s=fit10.ridge$lambda.min)
+```
+
+
+### e 
+Calculate test MSE
+```{r}
+MSE.lasso <- mean((Y.hat.lasso - Y_test)^2)
+MSE.ridge <- mean((Y.hat.ridge - Y_test)^2)
+
+
+print(paste("The MSE of model Lasso is:", round(MSE.lasso,3) , " and MSE of model Ridge is:", round(MSE.ridge,3)))
+
+```
+
+We can see that the MSE of Ridge model is bigger:
+```{r}
+MSE.ridge>MSE.lasso
+```
+
+Lets check the $R^2$ as well:
+```{r}
+#R2 for lasso regression
+SSE = sum((Y_test -Y.hat.lasso)^2)
+SST = sum( (Y_test-mean(df$medianHouseValue))^2)
+R2_lasso = 1 - SSE/SST
+
+
+#R2 for ridge regression
+SSE = sum((Y_test -Y.hat.ridge)^2)
+SST = sum( (Y_test-mean(df$medianHouseValue))^2)
+R2_ridge = 1 - SSE/SST
+
+
+print(paste("The R^2 of model Lasso is:", round(R2_lasso,3) , " and R^2 of model Ridge is:", round(R2_ridge,3)))
+```
+
+We can see that the R^2 of Ridge model is smaller:
+```{r}
+R2_ridge>R2_lasso
+```
+Which means that the MSE of the lasso model is smaller, and the lasso $R^2$ is better.
+Recall that the coefficients with the lasso method can go to zero, when with the ridge method they are fixed. This results in different bias-variance for the model trade-off.
+For this data, we will prefer to use the Lasso method.
+
+
+### 10.
+Run Ridge and LASSO without using cross-validation and find the lambda that minimizes the error on the training set
+```{r}
+
+MSE_checker <- function(model, X_train, Y_train){
+  results <- data.frame(lambda =NA, MSE=NA)
+  for (lambda in model$lambda) {
+    pred <- predict(model, as.matrix(X_train), s=lambda)
+    MSE <- mean((pred - Y_train)^2)
+    results <- rbind(results, c(lambda, MSE))
+  }
+  results <- na.omit(results)
+  return(arrange(results, by=MSE))
+}
+
+lasso.lambdas <- MSE_checker(fit.lasso, X_train, Y_train)
+ridge.lambdas <- MSE_checker(fit.ridge, X_train, Y_train)
+
+lasso.lambdas
+ridge.lambdas
+```
+```{r}
+print(paste("The lamda for the lowest MSE in the Lasso model is: ",(round(lasso.lambdas[lasso.lambdas$MSE==min(lasso.lambdas$MSE),c(1)],5))))
+```
+
+```{r}
+print(paste("The lamda for the lowest MSE in the Ridge model is: ",(round(ridge.lambdas[ridge.lambdas$MSE==min(ridge.lambdas$MSE),c(1)],5))))
+```
+
+```{r}
+ggplot()+geom_point(data=lasso.lambdas,aes(x=log(lambda),y=MSE,col="Lasso")) +geom_point(data=ridge.lambdas,aes(x=log(lambda),y=MSE,col="Ridge")) +theme_bw()
+```
+We can see that the smallest lambda has also the smallest MSE. This is because the smallest lambda has the smallest penality - thus leaving the most variables. When we have a lot of variables we get a situation of overfitting. This is why the MSE is so low (low bias, high variance). The main reason is because we doing our testing for our training data and not for the testing data (which casue to the "overfitting").
+
+### 11
+Repeat 1 but now give the glmnet function a grid of lambdas that includes 0
+```{r}
+fit.lasso11 <- glmnet(X_train, Y_train, family="gaussian", alpha=1, standardize = TRUE, lambda =  seq(0,10,length=1000))
+
+fit.ridge11 <- glmnet(X_train, Y_train, family="gaussian", alpha=0, standardize = TRUE, lambda =  seq(0,10,length=1000))
+
+lasso.lambdas11 <- MSE_checker(fit.lasso11, X_train, Y_train)
+ridge.lambdas11 <- MSE_checker(fit.ridge11, X_train, Y_train)
+lasso.lambdas11
+ridge.lambdas11
+```
+
+```{r}
+ggplot()+geom_point(data=lasso.lambdas11,aes(x=log(lambda),y=MSE,col="Lasso")) +geom_point(data=ridge.lambdas11,aes(x=log(lambda),y=MSE,col="Ridge")) +theme_bw()
+```
+
+We can see that $\lambda=0$ is the smallest MSE. That is because when the $\lambda$ is smaller, the penalty is smaller as well and thus we get many variables => overfitting.
+On the opposite side, for very big lambdas we will get underfitting. The results we got repeated themselves as Q10.
+
+## PCR Analysis
+### 1-2.
+
+```{r, message= FALSE}
+library(pls)
+```
+
+### 3.
+#### a-b
+Fit a PCR model
+```{r}
+pcr.mod <- pcr(medianHouseValue~.,data=train,  scale=TRUE, ncomp=10, validation="CV")
+summary(pcr.mod)
+```
+
+We can see that the number of components with the lowest cross-validation error is 10 components.
+We can explain 96.65% of the variance for 10 components.
+
+
+#### c
+Plot the cross-validation error as a function of the number of components
+```{r}
+par(mfrow=c(3,1))
+validationplot(pcr.mod, val.type = "RMSEP")
+validationplot(pcr.mod, val.type = "MSEP")
+validationplot(pcr.mod, val.type = "R2")
+```
+
+
+As we can see, the best MSE is for 10 components, BUT it is also the worst $R^2$.
+If we follow the plot - we can see the tradeoff between the MSE and the $R^2$: when the MSE drops, the R^2 becomes bigger and vice versa.
+
+#### d
+Use the number of components found in b. to predict the median house value
+```{r}
+ans <- data.frame(ncomp=NA, MSE=NA)
+for (i in c(1:10)){
+  pred <- predict(pcr.mod, newdata = data.frame(X_test), ncomp=i)
+  MSE <- mean((as.vector(pred)-Y_test)^2)
+  ans <- rbind(ans, c(i,MSE))
+}
+arrange(ans, ncomp,decreasing=TRUE)
+```
+
+### 4.
+
+```{r}
+pcr.mod100 <- pcr(medianHouseValue~.,data=train,  scale=TRUE, ncomp=100, validation="CV")
+summary(pcr.mod100)
+```
+
+```{r}
+par(mfrow=c(3,1))
+validationplot(pcr.mod100, val.type = "RMSEP")
+validationplot(pcr.mod100, val.type = "MSEP")
+validationplot(pcr.mod100, val.type = "R2")
+```
+
+```{r}
+ans <- data.frame(ncomp=NA, MSE=NA)
+for (i in c(1:100)){
+  pred <- predict(pcr.mod100, newdata = data.frame(X_test), ncomp=i)
+  MSE <- mean((as.vector(pred)-Y_test)^2)
+  ans <- rbind(ans, c(i,MSE))
+}
+arrange(ans, MSE,decreasing=FALSE)
+```
+
+## Elastic net
+
+### 1-2.
+
+```{r}
+mean_train <- sapply(train, mean)
+mean_test <- sapply(test, mean)
+data.frame(mean_train=mean_train, mean_test=mean_test)
+```
+We can see that the values for the variables are very similar. Which means that the model works pretty well in predicting the data.
+
+### 3.
+Train an Elastic Net model
+```{r}
+min_vals <- c()
+MSES <- c()
+for (a in seq(0,1,0.1)) {
+  fit.elnet <- glmnet(X_train, Y_train, family="gaussian", alpha=a, standardize = TRUE)
+  elnet.cv <- cv.glmnet(as.matrix(X_train), as.matrix(Y_train), type.measure="mse", alpha=a,family="gaussian", nfolds=5)
+  min_val <-  min(elnet.cv$cvm)
+  pred_elastic <- predict(elnet.cv, s=elnet.cv$lambda.min,newx=as.matrix(X_test))
+  MSE.elastic <- mean((Y_test-pred_elastic)^2)
+  
+  min_vals <- c(min_vals, min_val) 
+  MSES <- c(MSES, MSE.elastic)
+}
+
+elastic_results <- data.frame(Alpha=seq(0,1,0.1), CrossValidationMSE = min_vals, TestMSE = MSES)
+```
+
+Run over 10 different values of 𝛼and present in a table
+```{r}
+elastic_results
+```
+
+
+

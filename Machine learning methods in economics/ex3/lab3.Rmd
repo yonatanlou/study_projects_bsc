@@ -1,0 +1,458 @@
+---
+title: "lab3"
+author: "YonatanLourie-NatiShapiro"
+date: "6/9/2021"
+output:
+    rmarkdown::github_document:
+    theme: journal
+    toc: true
+    toc_depth: 3
+    df_print: paged
+---
+# Lab 3
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(sandwich)
+library(lmtest)
+library(tree)
+set.seed(42)
+```
+
+
+## Classification
+### 1.
+Load the Spam data from the file spam.data using the read.table function
+```{r}
+dat <- read.table("spam.data")
+# dat <- read.table("C:/Users/USER/Desktop/Study/Machine Learning/Lab 3/spam.data")
+dat$V58 = as.factor(ifelse(dat$V58 == 1 , "Yes", "No"))
+head(dat)
+```
+We changed the dependent variable of "Yes" and "No" to be a factor for the classification.
+We can also see that their are 57 explanatory variables.
+
+### 2.
+Learn your data:
+```{r}
+dim(dat)
+str(dat)
+# summary(dat)
+```
+We can observed that we have only numeric data.
+We can also tell that we don't have negative values (with the summary function).
+
+### 3.
+Split the data into train and test sets 
+```{r}
+sample <- sample.int(n = nrow(dat), size = floor(.7*nrow(dat)), replace = F)
+train <- dat[sample, ]
+test  <- dat[-sample, ]
+
+X_train <- train[,c(1:57)]
+X_test <- test[,c(1:57)]
+
+Y_train <- train[,c(58)]
+Y_test <- test[,c(58)]
+```
+
+### 5. Tree
+#### a.
+Load the tree library
+```{r}
+library(tree)
+```
+
+#### b.
+Fit a tree model using the tree function
+```{r}
+tree.model <- tree(V58 ~., data=train)
+```
+
+
+#### c.
+Print summary of the tree model and examine the results
+```{r}
+summary(tree.model)
+```
+We used the tree model for our classification problem. 
+Our goal for this algorithm is to minimize some form of error criterion. To achieve this, the algorithm computes in each step the RSS for each predictor, and chooses the lowest one to be the root.  
+The algorithm worked recursively and partitioned the variables. We can see that in the end result we are left with 10 decision nodes and 13 terminal nodes.
+Our misclassification error rate is: 0.09161
+
+
+#### d.
+Plot the model using plot(model) and text(model, pretty=0), what can you
+say about the results?
+
+```{r}
+plot(tree.model)
+text(tree.model,pretty=0,cex=0.6)
+
+```
+Based on above tree plot, ‘V53’ is the most important factor in determining whether or not something will be classefied as "spam". As the tree suggests, the left value corresponds to the statement being true. for example: if V53 < 0.0555 then we turn left. otherwise, the statement is false and we turn right. 
+The number of terminal nodes (13) are the bottom leafs indicating 'yes' or 'no'. Since this is a classification tree, the output is a classification whether or not something should be classified as 'yes' or a 'no'. The is as oppose to a regression tree where we would try and predict a numeric value.
+
+
+#### e.
+Use the model for prediction on the test set
+```{r}
+predictionTreeTest <- predict(tree.model, X_test, type = "class")
+summary(predictionTreeTest)
+```
+This shows how many classifiers are yes and not. Its dosent show how we performed, we need to check the confusion matrix.
+
+#### f.
+Evaluate the fit by printing the accuracy and the confusion matrix (recall
+that a confusion matrix is the prediction vs the truth)
+```{r}
+table(predictionTreeTest, actual = Y_test)
+accuracy <- mean(predictionTreeTest == Y_test)
+accuracy
+```
+Recall that the main diagonal is for the true fit of the model {(TRUE, TRUE), (FALSE, FALSE)} and what else is our false positive and true negative results.
+This means we were correct 795+458 (=1253) times and wrong 80+48 (=128) times.
+The accuracy is the proportion is: `r accuracy `
+
+#### g.
+Recall that we prune the tree in order to avoid overfitting. The tree size is a
+tuning parameter and defines the complexity of the tree, thus it is
+determined by cross-validation. Run cross-validation to identify how to
+prune the tree.
+```{r}
+tree.model.cv = cv.tree(tree.model, FUN=prune.misclass)
+```
+
+#### h.
+Examine the output of the cv function
+```{r}
+tree.model.cv
+```
+
+Lets examine the output:
+Dev stand for - Deviance which is the cross-validation error rate. Therefor we want it to be the lowest value possible.
+We can see looking at the results - that the best deviance for out tree is sized 13-10 (no changes of dev between these sizes).
+
+K stands for - the number of folds for the cross-validation
+We also want this to be small since it takes alot of computing power to cv a tree.
+
+#### i-j.
+Plot the deviance as a function of the size and the k.
+```{r}
+par(mfrow = c(2, 1))
+plot(tree.model.cv$size,tree.model.cv$dev, type="b", xlab="Tree size", ylab="Deviance", main="Dev as function of Size")
+plot(tree.model.cv$k,tree.model.cv$dev, type="b", xlab="K folds", ylab="Deviance", main="Dev as function of K folds")
+```
+
+We can see that as the size of tree increases, the dev decreases. This makes sense since as the tree gets more complex - it can do a better job predicting the outcome (hence reducing the dev).
+Also, as the tree size grows and dev drops - the number of k folds required to perform the cv increases. 
+This way - we understand that there is a trade-off between the size and complexity of tree to the computing power required. as trees get more complex, we might not be able to use cv to determine pruning.
+
+#### k. Prune the tree using the value you found in k.
+```{r}
+tree.model.cv.prune <- prune.misclass(tree.model, best=10)
+```
+
+
+#### l. Repeat d.-f. with the pruned tree (tree.model.cv.prune)
+
+```{r}
+plot(tree.model.cv.prune)
+text(tree.model.cv.prune , pretty =0, cex=0.7)
+```
+
+```{r}
+summary(tree.model.cv.prune)
+```
+We can see now that the terminal number of nodes is 10 as we wanted.
+
+```{r}
+predictionCVTreeTest <- predict(tree.model.cv.prune, X_test, type = "class")
+summary(predictionCVTreeTest)
+```
+```{r}
+table(predictionCVTreeTest, actual = Y_test)
+accuracy <- mean(predictionCVTreeTest == Y_test)
+accuracy
+```
+We can see by the accuracy table that the results we got as same as before. This indicates that the model has already chosen the best model by itself, but we were able to double check that using cross-validation.
+
+
+
+
+
+
+
+
+
+
+#######################################################
+
+
+
+#### g. TODO (not sure)
+Recall that we prune the tree in order to avoid overfitting. Run cross-validation to identify how to
+prune the tree.
+```{r}
+tree.model.cv = cv.tree(tree.model, FUN=prune.misclass)
+tree.model.cv
+```
+
+
+```{r}
+# index of tree with minimum error
+min_idx = which.min(tree.model.cv$dev)
+
+# number of terminal nodes in that tree
+tree.model.cv$size[min_idx]
+
+par(mfrow = c(1, 2))
+
+plot(tree.model.cv)
+tree.model.cv$size[min_idx]
+
+points(tree.model.cv$size[min_idx] , tree.model.cv$dev[min_idx], col = "red", cex = 2, pch = 20)
+plot(tree.model.cv$size, tree.model.cv$dev / nrow(train), type = "b",
+     xlab = "Tree Size", ylab = "CV Misclassification Rate")
+points(tree.model.cv$size[min_idx] , tree.model.cv$dev[min_idx], col = "red", cex = 2, pch = 20)
+
+```
+So the number of the treminal nodel with the minimum deviance is 10-13
+
+#### h. TODO (not sure)
+Examine the output of the cv function (print the output from g). What is
+size? What is k?
+
+```{r}
+tree.model.cv
+```
+So the best size is 13 and 10 (we will prefer 10), and the maximum k is 618, We can see that when the k is getting bigger, the deviance is getting bigger as well.
+The tuning parameter k controls a trade-off between the subtree’s complexity and its fit to the training data. When k = 0, then the subtree T will simply equal T, because then it just measures the training error.
+However, as l increases, there is a price to pay for having a tree with many terminal nodes, and so the quantity will tend to be minimized for a smaller subtree.
+*(The k for size=13 is -inf what the does it mean)*.
+
+
+#### i 
+dev reports the deviance, which is a measure of how good the fit is. Lower
+deviance means a better fit.
+Plot the deviance as a function of the size and the k.
+
+```{r}
+par(mfrow = c(2,1))
+plot(tree.model.cv$size, tree.model.cv$dev, type="b", xlab="Tree size", ylab="Deviance")
+plot(tree.model.cv$k, tree.model.cv$dev, type="b", xlab="K", ylab="Deviance")
+
+```
+As we mentioned above, the best tree size is 10 or 13 (we will prefer 10) with lowest deviance, and the worst k is above ~600.
+
+
+
+
+#### j.
+Find the tree size that minimizes the corss-validation error:
+
+We already found it in g. The best tree size is 10.
+
+
+#### k.
+Prune the tree using the value you found in k. by running
+prune.misclass(tree_mod, best = best_size)
+
+```{r}
+tree.model.cv.prune <- prune.misclass(tree.model, best=10)
+plot(tree.model.cv.prune)
+text(tree.model.cv.prune , pretty =0, cex=0.7)
+```
+
+#### l.  TODO (not sure)
+Repeat d.-f. with the pruned tree
+
+
+```{r}
+predictionTreeTest <- predict(tree.model.cv.prune, X_test, type = "class")
+summary(predictionTreeTest)
+table(predictionTreeTest, actual = Y_test)
+accuracy <- mean(predictionTreeTest == Y_test)
+accuracy
+tree.model.cv = cv.tree(tree.model, FUN=prune.misclass)
+# index of tree with minimum error
+min_idx = which.min(tree.model.cv$dev)
+
+# number of terminal nodes in that tree
+tree.model.cv$size[min_idx]
+
+par(mfrow = c(1, 2))
+
+plot(tree.model.cv)
+tree.model.cv$size[min_idx]
+
+points(tree.model.cv$size[min_idx] , tree.model.cv$dev[min_idx], col = "red", cex = 2, pch = 20)
+plot(tree.model.cv$size, tree.model.cv$dev / nrow(train), type = "b",
+     xlab = "Tree Size", ylab = "CV Misclassification Rate")
+points(tree.model.cv$size[min_idx] , tree.model.cv$dev[min_idx], col = "red", cex = 2, pch = 20)
+tree.model.cv
+
+par(mfrow = c(2,1))
+plot(tree.model.cv$size, tree.model.cv$dev, type="b", xlab="Tree size", ylab="Deviance")
+plot(tree.model.cv$k, tree.model.cv$dev, type="b", xlab="K", ylab="Deviance")
+
+```
+We got the same values which means that it is the best tree model.
+
+### 6 Random Forest
+
+#### a.
+Load randomForset package
+```{r, message=FALSE, results==hide, warning=FALSE}
+library(randomForest)
+```
+
+
+#### b.
+Fit a random forest model using the randomForest function
+```{r}
+model6 <- randomForest(V58~., data=train)
+model6
+```
+
+
+#### c.
+Use the model for prediction on the test set and evaluate the fit by its
+accuracy and the confusion matrix.
+
+```{r}
+RandomForestP <- predict(model6, newdata = X_test) #predict on the test set
+
+#check accuracy of predictions
+table(predicted = RandomForestP, actual = Y_test) 
+mean(RandomForestP==Y_test)
+```
+So our accuracy is `r mean(RandomForestP==Y_test)`.
+
+
+### 7. Regression trees
+#### a-b
+Read California Housing data set stored in a CSV file
+
+
+
+```{r}
+load("CA_samp.Rdata")
+df <- data.frame(CA_samp)
+sample <- sample.int(n = nrow(df), size = floor(.8*nrow(df)), replace = F)
+
+
+train_CA <- df[sample, ]
+test_CA  <- df[-sample, ]
+train_CA <- data.frame(scale(train_CA))
+test_CA  <- data.frame(scale(test_CA))
+
+X_train <- train_CA[, -which(names(train_CA) == "medianHouseValue")]
+X_test <- test_CA[, -which(names(test_CA) == "medianHouseValue")]
+
+Y_train <- train_CA[, which(names(train_CA) == "medianHouseValue")]
+Y_test <- test_CA[, which(names(test_CA) == "medianHouseValue")]
+
+```
+
+
+#### c.
+Everything that was done for the classification setting can be repeated in
+the regression setting in exactly the same way! Fit a regression tree to the
+data
+
+```{r}
+CA.tree.model <- tree(medianHouseValue~., data=train_CA)
+summary(CA.tree.model)
+```
+We left with 10 variables, and 11 terminal nodes
+```{r}
+plot(CA.tree.model) 
+text(CA.tree.model, pretty=0, cex=0.8)
+title(main = "Unpruned Regression Tree")
+```
+
+
+#### d. TODO
+Use the model for prediction on the test set and evaluate the fit using the
+root mean squared error (RMSE)
+
+```{r}
+CA_predictions <- predict(CA.tree.model, newdata = X_test)
+sqrt(mean(CA_predictions-Y_test)^2)
+
+```
+The RMSE is  `r sqrt(mean(CA_predictions-Y_test)^2)`
+
+## TODO
+from here: if we want to do CV
+
+But we want to check if we can make it better with cross validation as we did in the last tree model:
+
+```{r}
+CA.tree.model.cv <- cv.tree(CA.tree.model)
+plot(CA.tree.model.cv$size, sqrt(CA.tree.model.cv$dev / nrow(train)), type = "b",
+     xlab = "Tree Size", ylab = "CV-RMSE")
+```
+```{r}
+(CA.tree.model.cv)
+```
+We can see that we have the lowest deviance with tree with the size of 9.
+
+```{r}
+forest.model.prune <- prune.tree(CA.tree.model, best=5)
+plot(forest.model.prune)
+text(forest.model.prune , pretty =0, cex=0.7)
+```
+
+
+```{r}
+forest.model.prune <- prune.tree(CA.tree.model, best=5)
+CA_predictions.cv <- predict(forest.model.prune, newdata = X_test)
+sqrt(mean(CA_predictions.cv-Y_test)^2)
+
+sqrt(mean(CA_predictions-Y_test)^2)
+```
+We can see that we got higher RMSE which is not that good, but, when we think about the tra
+
+### 8. Random Forest
+
+#### a.
+Fit a random forest model in exactly the same way, but set
+importance=TRUE
+
+```{r}
+model8 <- randomForest(medianHouseValue~., data=train_CA, importance=TRUE)
+model8
+plot(model8)
+```
+
+
+#### b.
+Use the model for prediction on the test set and evaluate the fit using the
+root mean squared error (RMSE)
+
+```{r}
+RandomForest8 <- predict(model8, newdata = X_test) #predict on the test set
+
+#check accuracy of predictions
+table(predicted = RandomForest8, actual = Y_test) 
+mean(RandomForest8==Y_test)
+```
+
+
+#### c.
+Run importance and varImpPlot on the received model. These are some
+measures for importance of variables. For more see ?importance and ILSR
+pg. 330.
+
+```{r}
+
+```
+

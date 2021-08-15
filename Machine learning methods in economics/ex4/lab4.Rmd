@@ -1,0 +1,344 @@
+---
+title: "Lab4"
+author: "Yonatan-Lourie_Nathan-Shapiro"
+date: "6/21/2021"
+output:
+    rmarkdown::github_document:
+    theme: journal
+    toc: true
+    toc_depth: 4
+    df_print: paged
+---
+
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+       
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+
+### 1-3: Preparing the data.
+Load the ISLR libraray
+```{r}
+library(ISLR)
+library(factoextra)
+
+set.seed(42)
+```
+
+
+Load the NCI60 data by running: full_dat <- NCI60
+```{r}
+full_df <- NCI60
+```
+
+
+Run ?NCI60
+```{r}
+?NCI60
+```
+
+#### 3b.
+What is the format of the data?
+
+**Results:**
+NCI data: The data contains expression levels on 6830 genes from 64 cancer cell lines. Cancer type is also recorded.
+The format is a list containing two elements: data and labs.
+data is a 64 by 6830 matrix of the expression values while labs is a vector listing the cancer types for the 64 cell lines.
+
+
+#### 3c.
+What is the size of the data?
+```{r}
+df <- full_df$data
+labs <- full_df$labs
+dim(df)
+```
+
+
+#### 3d.
+Use the str function in order to take a glimpse at the data
+```{r}
+str(df)
+head(data.frame(df))
+```
+
+**Results:**
+We can see that the type of our data is floats.
+We have 64 vectors that contain 6830 observations.
+
+
+#### 3e.
+How many different labels are there? Use table to learn about the different labels you have
+```{r}
+unique(labs)
+table(labs)
+```
+**Results:**
+We can see that we have 14 unique cancer types.
+
+
+### 4. PCA
+
+#### a. 
+Run PCA using the prcomp function.
+```{r}
+#we need to also scale the data before running the pca
+pca.model <- prcomp(df, scale=TRUE)
+```
+
+
+#### b.
+Explore the PCA object
+```{r}
+names(pca.model)
+length(pca.model$center)
+```
+
+**Results:**
+The pca model output is 5 tables:
+*sdev* - is the standard deviation of each cancer cell. we calculate it by using the eigenvalues of the covariance matrix.
+
+*rotation* - The rotation is a matrix with the resulting principal component vectors. Each column is a principal component, and the columns are ordered by decreasing variance explained.
+Each principal component has dimension p = 6830, and there will be min(n-1, p) = 64 informative principal components. So pca.model$rotation is a 6830 x 64 matrix.
+
+*center* - variable to have mean equals to zero. When we scaled the data, we actually normalize the variables to have standard deviation equals to 1.
+
+*scale* - indicates wether or not a scale was made to the data.
+
+*x* - the matrix x has the principal component score vectors.
+
+
+#### c.
+Extract the standard deviation of each of the PCs.
+```{r}
+proportion_var <- round(pca.model$sdev/sum(pca.model$sdev),3)
+```
+How much of the variance is explained by each of the PCs?
+```{r}
+
+knitr::kable(cbind(1:64,proportion_var))
+```
+
+#### d.
+Calculate the cumulative proportion of variance explained by the PCs. How many PCs are needed to explain 50%/75%/100% of the variance in the data?
+```{r}
+results <- data.frame(PCA =NA, var=NA)
+for (i in c(1:64)) {
+  ans <- sum(proportion_var[1:i])
+  results <- rbind(results, c(i, ans))
+}
+results <- na.omit(results)
+rownames(results) <- results$PCA
+
+results.5 <- subset(results, var>0.5)
+a <- results.5[which.min(results.5$var),]
+
+results.75 <- subset(results, var>0.75)
+b <- results.75[which.min(results.75$var),]
+
+c <- results[64,]
+final.results <- data.frame(rbind(a,b,c))
+final.results
+```
+
+#### e.
+Plot the cumulative proportion of variance explained by the PCs as a function of the number of PCs
+```{r}
+temp_df <- data.frame(cbind(PCA=results$PCA, var=results$var))
+ggplot(temp_df, aes(x=PCA, y=var)) +
+  geom_point() +ggtitle("cumulative proportion of variance")
+```
+
+#### f.
+Let's see how the data looks in the PC space. Plot the PC scores each observation got on the first two PCs.
+```{r}
+plot(pca.model$x[,1], pca.model$x[,2], xlab="PC1", ylab="PC2",main="First Two Principal Components of Cancer types")
+```
+
+#### g.
+So far we have not used the labels. It would be interesting to see the distribution of the labels when looking at the first two PCs.
+```{r}
+cols <- rainbow(length(unique(labs)))
+obs_cols <- cols[as.numeric(as.factor(labs))]
+
+
+plot(pca.model$x[,1], pca.model$x[,2], xlab="PC1", ylab="PC2",main="First Two Principal Components of Cancer types", col=obs_cols, pch=20)
+```
+
+**Results:**
+
+When adding color to each of the components we can start to see the clustering more clearly. The dots colored the same color, belong to the same clustering group.
+
+Projections of the NCI60 cancer cell lines onto the first two principal components -PC1, PC2.
+In other words, the scores for the first two principal components. 
+On the whole, observations belonging to a single cancer type tend to lie near each other in this low-dimensional space. It would not have been possible to visualize the data without using a dimension reduction method such as PCA.
+
+
+We also added labels to the plot for additional information
+```{r}
+PCS <- data.frame(pca.model$x[,1], pca.model$x[,2])
+names(PCS) <- c("PC1", "PC2")
+PCS$labels <- labs
+
+ggplot(PCS, aes(PC1, PC2)) + 
+  geom_text(aes(label = labels,col=obs_cols), size = 2.5) +
+  theme(legend.position="none") +
+  xlab("First Principal Component") + 
+  ylab("Second Principal Component") + 
+  ggtitle("First Two Principal Components of Cancer types") 
+```
+
+### 5. Hierarchical Clustering:
+
+#### a.
+Scale the data in order for all the variables to have the same scale
+```{r}
+sd_df <- scale(df)
+```
+
+
+#### b.
+Use the dist function in order to calculate the distances between every two observations.
+```{r}
+df.dist <- dist(sd_df)
+```
+
+
+#### c.
+Run hierarchical clustering using complete linkage
+```{r}
+hc_model <- hclust(df.dist, method = "complete",)
+hc_model$labels = labs
+```
+
+
+#### d.
+Plot the dendrogram of the model
+```{r}
+plot(hc_model, main="Complete linkage", xlab="", sub="", ylab="",cex=0.6)
+```
+
+
+
+#### e.
+Recall that hierarchical clustering offers many options of clustering, depending on the desired number of clusters. Choose a number and find how the model divides the observations into these clusters.
+
+
+```{r}
+fviz_nbclust(df, FUN=hcut, method="silhouette")
+```
+
+
+```{r}
+fviz_nbclust(df, kmeans, method = "wss") +
+geom_vline(xintercept = 6, linetype = 2)
+```
+
+
+**Results:**
+For determening the ideal number of k clusters we used to common methods:
+Elbow and Silhouette method. 
+In this case, we can see that both methods recommend a k=6 clustering.
+
+
+
+#### f.
+how the model divides the observations into these clusters.
+```{r}
+hc_cutted <- cutree(hc_model, 2)
+plot(hc_model, cex=0.7)
+rect.hclust(hc_model , k = 6, border = 1:4)
+
+abline(h = 130, col = 'red',lwd=3)
+```
+
+**Results:**
+We can see that our Dendogram is divided into 6 clusters. These clusters are grouping the variables by closeness. Meaning, each of the 6 groups are the variables that are most related to the other variables within the same group.
+For example, if we look at the left division- we have breast, cns, renal and nsclc.
+Because the algorithm chose to group them together, we can assume that they have a high similarity among them (more than any other cancer type). 
+We can further divide of Dendogram into smaller sections- however, using the methods from before, we can infere that we won't gain much knowledge and might create overfitting to the model.
+
+
+### 6. K-Means
+#### a.
+Run kmeans on the scaled data from 5a. and set the k it should use.
+```{r}
+km.out <- kmeans(sd_df, 6, nstart = 20)
+```
+
+#### b.
+Explore the resulting kmeans object – What did the function return? What does each of its values?
+```{r}
+summary(km.out)
+```
+
+**Results:**
+
+cluster - 	
+A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+
+centers	- 
+A matrix of cluster centres.
+
+totss	- 
+The total sum of squares.
+
+withinss - 	
+Vector of within-cluster sum of squares, one component per cluster.
+
+tot.withinss - 	
+Total within-cluster sum of squares, i.e. sum(withinss).
+
+betweenss	-
+The between-cluster sum of squares, i.e. totss-tot.withinss.
+
+size -
+The number of points in each cluster.
+
+iter - 
+The number of (outer) iterations.
+
+ifault -	
+integer: indicator of a possible algorithm problem – for experts.
+
+
+#### c. 
+How much are the clusters diverse?
+##### 1. 
+Within cluster sum of squares by cluster:
+```{r}
+km.out$withinss
+```
+##### 2.
+between-cluster sum of squares:
+```{r}
+km.out$betweenss
+```
+
+#### d.
+Extract the clusters of each observation
+```{r}
+data.frame(cluster=km.out$cluster)
+```
+
+#### e.
+Return to the plot from 4f. Color the observations using the k-means clusters.
+```{r}
+par(mfrow=c(1,2))
+cols <- rainbow(length(unique(labs)))
+obs_cols <- cols[as.numeric(as.factor(labs))]
+
+plot(pca.model$x[,1], pca.model$x[,2], xlab="PC1", ylab="PC2",main="PCA", col=obs_cols, pch=20)
+
+plot(pca.model$x[,1], pca.model$x[,2], xlab="PC1", ylab="PC2",main="K-Means", col=km.out$cluster+1, pch=20)
+
+
+```
+
+
+**Results:** 
+We can see that the clustering of each method are not perfectly alike.
+Each algorithm performs the clustering in a different matter, thus resulting a different result.
+Depending on our data, we need to decide which clustering method will work better.
