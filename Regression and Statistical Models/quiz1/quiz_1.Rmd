@@ -1,0 +1,212 @@
+---
+title: "Quiz 1 - Regression"
+author: "Yonatan-Lourie, Idan-ben-yitschak"
+date: "5/6/2021"
+output:
+    rmarkdown::github_document:
+    theme: journal
+    toc: true
+    toc_depth: 3
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+```
+
+## 4
+
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+### a
+
+
+```{r}
+
+My_lm <- function(X,Y){
+  #' @param X is matrix with n rows and p+1 columns
+  #' @param Y is vector with length n 
+  
+  
+  X <- as.matrix(X)
+  X <- cbind(1,X)
+  Y <- as.matrix(Y)
+  n <- nrow(X)
+  p <- ncol(X)
+  dof <-  n-(p-1)-1
+  
+  beta_hat <- solve(t(X)%*%X)%*%t(X)%*%Y
+  Y_hat <- X%*%beta_hat
+  residuals <- Y-(Y_hat)
+  sigma2_hat <- (t(residuals)%*%residuals/(n-p))[1,1]
+  
+  beta_cov <- sigma2_hat*solve(t(X)%*%X)
+  
+  T_stat <- beta_hat/sqrt(diag(beta_cov))
+
+  
+  P_Values <- 2*(1-pt(abs(T_stat),n-p))
+  
+  SSR <- sum((Y_hat - Y) ^ 2)  ## residual sum of squares
+  SST <- sum((Y - mean(Y)) ^ 2)  ## total sum of squares
+  R_squared <- 1- SSR/SST
+  
+  
+  
+    
+  # TODO: Complete the code.
+  #       Don't use any external libaries or functions for computing linear models.
+  
+  return(list(beta_hat, beta_cov, T_stat, P_Values, sigma2_hat, R_squared, dof, residuals, X, Y, Y_hat))
+
+
+}
+
+```
+
+
+
+```{r}
+df <- read.csv("Startups.csv")
+```
+
+
+#### i
+
+```{r}
+head(df)
+str(df)
+cat("--------------------------------")
+summary(df)
+```
+
+#### ii
+
+
+```{r}
+myhist <- hist(df$Profit)
+multiplier <- myhist$counts / myhist$density
+mydensity <- density(df$Profit)
+mydensity$y <- mydensity$y * multiplier[1]
+
+plot(myhist)
+lines(mydensity)
+
+myx <- seq(min(df$Profit), max(df$Profit), length.out= 100)
+mymean <- mean(df$Profit)
+mysd <- sd(df$Profit)
+
+normal <- dnorm(x = myx, mean = mymean, sd = mysd)
+lines(myx, normal * multiplier[1], col = "blue", lwd = 2)
+
+sd_x <- seq(mymean - 3 * mysd, mymean + 3 * mysd, by = mysd)
+sd_y <- dnorm(x = sd_x, mean = mymean, sd = mysd) * multiplier[1]
+
+# segments(x0 = sd_x, y0= 0, x1 = sd_x, y1 = sd_y, col = "firebrick4", lwd = 2)
+```
+We can see that we dont have a perfect correlation with the normal (blue) dist - but there is similiarity.
+
+
+Lets look at the QQPlot to identify normality:
+
+```{r}
+qqnorm(df$Profit)
+qqline(df$Profit, col = "green", lwd = 2)
+```
+
+It looks like a normal distribution but with long right tail. we also can see that we have a "gap" in the data.
+
+```{r}
+pairs(df[c(-4)], upper.panel = NULL)
+```
+
+```{r}
+cor(df[c(-4)])
+```
+
+#### iv
+
+```{r}
+unique(df$State)
+df$NY <- ifelse(df$State == "New York", 1,0)
+df$FL <- ifelse(df$State == "Florida", 1,0)
+#making 2 dummy variables due to 3 categorical variables.
+df <- df[c(-4)]
+
+model <- My_lm(df[c(-4)], df["Profit"])
+print('betas_hat: ')
+betas_hat <- model[[1]]
+rownames(betas_hat)[1] = "intercept"
+betas_hat
+```
+
+#### v
+
+```{r}
+T_stat <- model[[3]]
+T_stat
+```
+
+
+#### vi 
+
+```{r}
+CI <- function(alpha, beta, v, deg){
+  CI.low <-(beta - qt(1-alpha/2,deg)*sqrt(v))
+  CI.high <-(beta + qt(1-alpha/2,deg)*sqrt(v))
+  return(c(CI.low, CI.high))
+}
+
+CI_df <- data.frame(beta =NA, lower=NA, upper=NA)
+deg <- nrow(df)-ncol(df)
+betas_var <- diag(model[[2]])
+for (i in c(1:length(betas_hat))) {
+  beta <- rownames(betas_hat)[i]
+  lower <- CI(0.05,betas_hat[i], betas_var[i], deg)[1]
+  upper <- CI(0.05,betas_hat[i], betas_var[i], deg)[2]
+  CI_df <- rbind(CI_df, c(beta,lower, upper))
+}
+
+na.omit(CI_df)
+```
+
+
+#### vii 
+
+```{r}
+abs(T_stat)>qt(1-(0.05/2), deg-1)
+```
+We wil reject the null hypothesis for the intercept and for R.D spend.
+
+### c
+
+```{r}
+df_test <- read.csv("Startups_test.csv")
+df_test
+```
+
+#### i
+
+```{r}
+df_test$NY <- ifelse(df_test$State == "New York", 1,0)
+df_test$FL <- ifelse(df_test$State == "Florida", 1,0)
+#making 2 dummy variables due to 3 categorical variables.
+
+X <- df_test[c(1,2,3,6,7)]
+X <- cbind(1, X)
+Y_star <- df_test[c(5)]
+Y_star_hat <- t(betas_hat)%*%t(X)
+
+t(Y_star_hat)
+```
+
+#### ii
+
+```{r}
+RMSE <- sqrt((sum((Y_star-Y_star_hat)^2))/nrow(Y_star))
+RMSE
+```
