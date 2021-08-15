@@ -1,0 +1,322 @@
+---
+title: "PS2"
+author: "Yonatan-Lourie"
+date: "4/25/2021"
+output:
+  html_document:
+    rmarkdown::html_document:
+    theme: journal
+    toc: true
+    toc_depth: 2
+    df_print: paged
+    includes:
+      after_body: footer.html
+---
+
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+       
+knitr::opts_chunk$set(warning=FALSE)
+
+```
+
+```{r, message=FALSE, results==hide, warning=FALSE}
+library(magrittr)
+library(haven)
+library(Hmisc)
+library(tidyverse)
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+library(stargazer)
+library(plyr)
+library(ri)
+library(scales)
+library(readstata13)
+library(gridExtra)
+library(sandwich)
+library(lmtest)
+```
+
+$$
+(2) \ \ E\left(r_{j}\right)-r_{f}=\beta_{j}\left(E\left(r_{M}\right)-r_{f}\right) \ \ \ S.t: \ \ 
+\beta_j = \frac{cov(r_j, r_M)}{var(r_M)}
+$$
+
+## Part 1. CAPM -$\beta$ and Understanding OLS
+
+### 1.
+
+```{r}
+df <- read.dta13("data_part1.dta")
+df$rf <- 0.0041
+df$rM_rf <- df$r_M - df$rf
+df$rA_rf <- df$r_A - df$rf
+df$rB_rf <- df$r_B - df$rf
+head(df)
+```
+
+### 2. sample variance of $(r_A; r_B; r_M)$ , and separately of $(r_A-r_f ; r_B-r_f ; r_M-r_f )$
+
+```{r}
+
+var1 <- cov(df[c("r_A", "r_B", "r_M")])
+var2 <- cov(df[c("rA_rf", "rB_rf", "rM_rf")])
+
+
+#or maybe should be:
+# thats the ey she did it in lecturee 6 but i cant find the reason
+# a = lapply(df[c("r_A", "r_B", "r_M")], var)
+# b = lapply(df[c("rA_rf", "rB_rf", "rM_rf")], var)
+# 
+# var_diff = data.frame(Variance=unlist(a),DiffVar=unlist(b))
+# var_diff
+
+var1
+var2
+
+```
+
+We can see the tow sample covariances is exactly the same - and that because $r_f$ is constant and we know that $Var(X +c) = Var(X)$
+
+### 3. Scatterplots - SPDR VS. MS
+
+```{r}
+y.lim <- c(min(df$rA_rf,df$rB_rf), max(df$rA_rf,df$rB_rf))
+plot1 <- ggplot(df, aes(x=rM_rf, y=rA_rf)) + geom_point() + ylim(y.lim) +ggtitle("SPDR Gold Shares")
+plot2 <- ggplot(df, aes(x=rM_rf, y=rB_rf)) + geom_point() + ylim(y.lim) +ggtitle("Morgan Stanely")
+grid.arrange(plot1, plot2, ncol=2) 
+```
+
+The excess returns of SPDR gold shares is less strongly associated with the market then MS.
+
+This easy to see because when in MS graph we can see that when the market returns is rising, the MS returns is rising to. On the other hand, the SPDR is staying basically around 0 (and is not going up with the market returns). In section 1.2 we got that the covariance of (A,M): `r var1[1,3]` is lower than (B,M) - `r var1[2,3]` which explaining pretty well the graph below.
+
+### 4. (a)
+
+consider: $\left(r_{j t}-r_{f}\right)=\alpha_{j}+\beta_{j}\left(r_{M t}-r_{f}\right)+\epsilon_{j t}$ and ill prove that $\beta_j = \frac{cov(r_j, r_M)}{var(r_M)}$
+
+let $Y=(r_A-r_f), X=(r_M-r_f)$ I will derive to projection with the projection formula $(X^TX)^{-1}X^TY_j$.
+
+```{r}
+#define our Y, X
+Y_1 <- df$rA_rf
+Y_2 <- df$rB_rf
+X <- df$rM_rf
+intercept <- rep(1, length(Y_1)) #making the p=0
+X <- cbind(intercept, X)
+
+r_A <- df$r_A
+r_B <- df$r_B
+r_M <- df$r_M
+
+#projection of X on Y
+coeff1 <- solve(t(X) %*% X) %*% t(X) %*% Y_1
+reg.beta1 <- round(coeff1[2],3)
+cov.r_A <- round(cov(r_A, r_M)/var(r_M),3)
+
+
+coeff2 <- solve(t(X) %*% X) %*% t(X) %*% Y_2
+reg.beta2 <- round(coeff2[2],3)
+cov.r_B <- round(cov(r_B, r_M)/var(r_M),3)
+
+cat(paste0("For beta_A: ",cov.r_A, " = ", reg.beta1))
+cat(paste0("For beta_B: ",cov.r_B, " = ", reg.beta2))
+```
+
+### (b) 
+
+Easy to see that if $E\left(r_{j}\right)-r_{f}=\beta_{j}\left(E\left(r_{M}\right)-r_{f}\right)$ then $Y=(r_A-r_f), X=(r_M-r_f)$ and we know that $E\left(r_{j}\right)-r_{f}=\beta_{j}\left(E\left(r_{M}\right)-r_{f}\right) \rightarrow E(E\left(r_{j}\right)-r_{f})=E(\beta_{j}\left(E\left(r_{M}\right)-r_{f}\right)) \rightarrow E(Y) = \beta_jE(X)$
+
+$$
+\left(r_{j t}-r_{f}\right)=\alpha_{j}+\beta_{j}\left(r_{M t}-r_{f}\right)+\epsilon_{j t} \rightarrow E\left(r_{j t}-r_{f}\right)=E(\alpha_{j}+\beta_{j}\left(r_{M t}-r_{f}\right)+\epsilon_{j t})
+$$
+
+And by the linearity of expectation: $E(r_{j t})-r_{f}=E(\alpha_{j})+\beta_{j}(E(r_{M t})-r_{f})+E(\epsilon_{j t})$
+
+recall that $r_f$ is constant, $E(\epsilon_{jt})$ is 0. so if equation (1) holds, which is $E\left(r_{j}\right)-r_{f}=\beta_{j}\left(E\left(r_{M}\right)-r_{f}\right)$
+
+Than $a_j=0$
+
+### (c) Estimate equation 2 by OLS regression separately for gold and Morgan Stanley shares using the lm function
+
+```{r}
+Y_1 <- df$rA_rf
+Y_2 <- df$rB_rf
+X <- df$rM_rf
+
+r_A <- df$r_A
+r_B <- df$r_B
+r_M <- df$r_M
+
+
+reg.model1 <- lm(Y_1~X)
+reg.beta1 <- round(reg.model1$coefficients[2],3)
+reg.alpha1 <- reg.model1$coefficients[1]
+
+reg.model2 <- lm(Y_2~X)
+reg.beta2 <- round(reg.model2$coefficients[2],3)
+reg.alpha2 <- reg.model2$coefficients[1]
+
+```
+
+(i) My estimated values $\hat\beta_A =$ `r reg.beta1` , $\hat\beta_B =$ `r reg.beta2`
+(ii) Yes. we can see that the $cov(A,M)$ is smaller than $cov(A,B)$. Because we are estimating the beta with single linear regression, one of the main impact on the beta is the covariance of (X,Y).
+(iii) Because the beta of SPDR is really low (closer to zero) it means that it less correlated with the market the MS (for example, for every rise of 1000\$ in the market, SPDR will be `r 1000*reg.beta1` and MS will be `r 1000*1.683` .
+
+```{r}
+y.lim <- c(min(df$rA_rf,df$rB_rf), max(df$rA_rf,df$rB_rf))
+plot1 <- ggplot(df, aes(x=rM_rf, y=rA_rf)) + geom_point()+geom_smooth(method = "lm", se = FALSE) + ylim(y.lim) +ggtitle("SPDR Gold Shares")
+plot2 <- ggplot(df, aes(x=rM_rf, y=rB_rf)) + geom_point() +geom_smooth(method = "lm", se = FALSE) + ylim(y.lim) +ggtitle("Morgan Stanely")
+grid.arrange(plot1, plot2, ncol=2) 
+```
+
+(v) To a worried investor i would recommend to invest in the SPDR, because it will not be affected alot with the market volatility.
+
+------------------------------------------------------------------------
+
+## Part 2. CAPM -Multiple Hypothesis Testing and the Search for $\alpha$
+
+### 1
+
+```{r}
+df2 <- read.dta13("data_part2.dta")
+df2_len <- length(colnames(df2))
+
+df2[2:df2_len] <- lapply(df2[2:df2_len], function(x) x-0.0041)
+```
+
+### 2
+
+```{r}
+SQPX.reg <- lm(r_swppx ~ r_M, data=df2)
+SQPX.alpha <- SQPX.reg$coefficients[1]
+SQPX.beta <- SQPX.reg$coefficients[2]
+print(paste0("alpha is: ", round(SQPX.alpha,4), " beta is: ",round(SQPX.beta,4)))
+```
+
+(a) In equation 2, the variance of the residulas may vary by each sample. We can use Homoscedasticity if the variance of the residuals is distinct, and we cant assume that so Homoscedasticity is not plausible.
+
+    In the plot below, for homoscedasticity, we will expect horizontal line with equally spread points for a good indication of homoscedasticity. This is not the case in our example, where we have a heteroscedasticity problem.
+
+    ```{r}
+    plot(SQPX.reg, which=3)
+    ```
+
+(b) Let's test the null hypothesis that $\alpha=0$ with 0.1 significant level (using lmtest and sandwich libraries):
+
+```{r}
+#vcovHC for heteroscedastic-robust
+SQPX.alpha.hat <- SQPX.alpha
+SQPX.alpha.se <- sqrt(vcovHC(SQPX.reg)[1,1])
+test.stat <- abs(SQPX.alpha.hat/SQPX.alpha.se)
+SQPX.alpha.pval <- 2*(1-pt(test.stat,dim(df2)[1]-1))
+
+#Will we reject the null hypothesis at 0.1 level?
+test.stat > qt(0.95, dim(df2)[1]-1)
+SQPX.alpha.pval <0.1
+```
+
+So we reject the null hypothesis at 0.1 level that $\alpha =0$
+
+(c) 
+
+```{r}
+SQPX.CI <- coefci(SQPX.reg, df = dim(df2)[1]-1, level=.90, vcov = vcovHC)[1,]
+SQPX.CI 
+#denote that vcovHC for heteroscedastic-robust
+```
+
+(d) We can conclude that the alpha will be greater than 0, but not significantly - in 90% chances the alpha will be between `r SQPX.CI[1]` and `r SQPX.CI[2]` which is nice but not outperform the market by alot, but as investor i probably will invest in that fund.
+
+### 3
+
+```{r}
+# add documntation
+Hypo.data <- function(df, fund, r_M, a, fund_name) {
+  fund.reg <- lm(fund ~ r_M)
+  fund.alpha.hat <- fund.reg$coefficients[1]
+  fund.beta.hat <- fund.reg$coefficients[2]
+  fund.alpha.se <- sqrt(vcovHC(fund.reg)[1,1])
+  
+  test.stat <- abs(fund.alpha.hat/fund.alpha.se)
+  fund.alpha.pval <- 2*(1-pt(test.stat,dim(df)[1]-1))
+  null_status <- test.stat > qt(1-(a/2), dim(df)[1]-1)
+  # fund.alpha.pval < a
+  
+  fund.CI <- coefci(fund.reg, df = dim(df)[1]-1, level=1-a, vcov = vcovHC)[1,]
+  ans <- data.frame(fund = fund_name, alpha= round(fund.alpha.hat,4), beta= round(fund.beta.hat,4), nullHypo = null_status, pval = round(fund.alpha.pval,4))
+  return(ans)
+}
+
+
+```
+
+```{r}
+## add documtatton
+data <- data.frame(fund = NA, alpha= NA, beta= NA, nullHypo = NA, pval = NA)
+for (col in c(1:10)) {
+  tmpData <- (Hypo.data(df2,df2[,col+2], df2$r_M, 0.1, names(df2)[3:12][col]))
+  data <- rbind(data, tmpData)
+} 
+rownames(data) <- NULL
+data <- na.omit(data)
+data
+```
+
+We will reject 3 null hypothesis of there funds: vbisx, swtsx, swppx.
+
+Under the CAPM model, if $\alpha_j>0$ , the asset has a higher expected return than than the market. So i can conclude that the alpha will be the indicator for returns (bigger alpha =\> bigger returns).
+
+The funds that make me suprised whom made to the list for Time's 50 Best Mutual Funds in 2018 are those with the negative alpha **AND** with with rejection of the null hypothesis which is - vbisx.
+
+### 4
+
+(a) Because we have 10 hypothesis testing, and we checking with a significance level of 0.1, if only one null hypothesis will be True, then we have proportion of $\frac{1}{10}$ True null hypothesis which is 0.1.
+
+(b) If the tow null hypothesis are independent $P(A\cap B)=P(A)P(B)$ then we can say that:
+
+$$
+P(reject \ any\ null) = 1-P(reject \ no \ null) \\= P(don't \ reject \ H_0^{(1)} \ \& \ \ don't \ reject \ H_0^{(2)})=1-(1-\alpha)^2= 
+$$
+
+`r 1-(1-0.1)^2` which is indeed greater than 0.1.
+
+It might be equal to 0.1 if the the tow null hypothesis are fully dependent: $P(A \cap B)=min(P(a),P(b)) 0.1$
+
+(c) According to the proof I showed in the previous section:
+
+$$
+P(reject \ any\ null) = 1-P(reject \ no \ null) \\= P(don't \ reject \ H_0^{(1)} \ \& \dots\& \ \ don't \ reject \ H_0^{(n)})=1-(1-\alpha)^n= 1-(1-0.1)^{10} \\ = 0.65
+$$
+
+it could be equal to 0.1 by the same explanation in section b.
+
+### 5
+
+```{r}
+data$bonferon <- data$pval < (0.1/10)
+data
+```
+
+We will reject only one null hypothesis (vbisx fund).
+
+### 6
+
+```{r}
+alpha= 0.1
+data <- arrange(data, pval)
+data$k <- c(1:nrow(data))
+data$RejHypK <- ifelse((alpha/(10+1-data$k))>data$pval, TRUE, FALSE)
+#for k+2 the process is ending.
+data
+```
+
+Ive rejected tow null hypothesis (vbisx, swtsx). Yes i was able to reject one more null hypothesis then the bonferonni correction.
+
+We can reject more, by using other methods, for example, the FDR by Benjamini & Hochberg (which are israelis!):
+
+```{r}
+p <- data$pval
+sum(p.adjust(p, "BH")<alpha)
+```

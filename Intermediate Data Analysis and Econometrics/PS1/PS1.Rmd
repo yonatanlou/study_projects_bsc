@@ -1,0 +1,251 @@
+---
+title: "PS_1"
+author: "Yonatan-Lourie"
+date: "4/12/2021"
+output:
+  html_document:
+    rmarkdown::html_document:
+    theme: journal
+---
+
+```{r}
+setwd("C:\\Users\\Admin\\Desktop\\Studies\\2nd, 2nd\\Applied econometrics\\PS1")
+       
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+```{r, message=FALSE, results==hide, warning=FALSE}
+library(magrittr)
+library(haven)
+library(Hmisc)
+library(tidyverse)
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+library(stargazer)
+library(plyr)
+library(ri)
+library(scales)
+```
+
+## Part 1. Setup and Descriptive Statistics
+
+### 1-2
+
+```{r}
+#1
+df_ <- readRDS("earlytrainingproject_clean.rds") #Load the dataset.
+
+#2
+varsChild <- c("iq5", "iq6", "iq12", "retn12", "iep12")
+varsTeen <- c("iq15", "hsgrad", "parent")
+varsAdult <- c("college", "employed", "convicted", "felon", "jailed", "marijuana")
+
+vars <- c(varsChild, varsTeen, varsAdult)
+
+```
+
+### 3-4
+
+```{r}
+#3
+df_ <- df_[c("SUBJECT", "DC_TRT", "SEX", vars)]
+
+#4
+print(describe(df_))
+
+```
+
+### 5
+
+```{r}
+#5
+#I've used sapply to sum how many nulls i have in each column (it feels like to messy eith the describe)
+na_count <-sapply(df_, function(y) sum(length(which(is.na(y)))))
+print(na_count)
+df <- na.omit(df_)
+na_count2 <-sapply(df, function(y) sum(length(which(is.na(y)))))
+print(paste("Number of omitted observations: ", sum(na_count)-sum(na_count2)))
+
+```
+
+### 6
+
+```{r}
+describe(df$SEX)
+```
+
+### 7-8
+
+```{r results='asis'}
+
+#7
+#create a new dummy variable that mapping treated and sex.
+df$treat <- ifelse(df$DC_TRT=="Control", 0, 1)
+df$fem <- ifelse(df$SEX=="F", 1, 0)
+
+#8
+stargazer(subset(df,treat==0)[vars],type="html",title="Descriptive Statistics, Control group", digits=2,covariate.labels=vars)
+
+stargazer(subset(df,treat==1)[vars],type="html",title="Descriptive Statistics, Treated group", digits=2,covariate.labels=vars)
+```
+
+## Part 2. Estimates of Average Treatment Effects
+
+#### Denote that the sign of the effect is changing between variables (we want less from jailed but more IQ)
+
+### 1
+
+```{r results='asis'}
+#subsetting only the treated and not treated mean of vars
+mean_treated = sapply(subset(df, df$treat==1)[c(vars)], mean)
+mean_not_treated = sapply(subset(df, df$treat==0)[c(vars)], mean)
+
+#making the dataframe
+means_table = data.frame(mean_treated, mean_not_treated, effect=mean_treated-mean_not_treated)
+
+stargazer(means_table, type="html",title="Estimated average treatment effects", digits=2,summary = FALSE, covariate.labels = c("Var","Mean treated", "Mean not treated", "Avrage treatment effect"))
+```
+
+### 2
+
+```{r results='asis'}
+
+#getting only treated and not treated boys mean of vars 
+mean_treated_M = sapply(subset(df, df$treat==1 & df$fem==0)[c(vars)], mean)
+mean_not_treated_M = sapply(subset(df, df$treat==0 & df$fem==0)[c(vars)], mean)
+
+means_table_M = data.frame(mean_treated_M, mean_not_treated_M, effect=mean_treated_M-mean_not_treated_M)
+
+stargzer_boys <-  stargazer(means_table_M, type="html",title="Estimated average treatment effects for boys", digits=2,summary = FALSE, covariate.labels = c("Var","Mean treated", "Mean not treated", "Avrage treatment effect"))
+
+#getting only treated and not treated females mean of vars 
+mean_treated_F = sapply(subset(df, df$treat==1 & df$fem==1)[c(vars)], mean)
+mean_not_treated_F = sapply(subset(df, df$treat==0 & df$fem==1)[c(vars)], mean)
+
+means_table_F = data.frame(mean_treated_F, mean_not_treated_F, effect=mean_treated_F-mean_not_treated_F)
+
+stargazer_girls <- stargazer(means_table_F, type="html",title="Estimated average treatment effects for girls", digits=2,summary = FALSE, covariate.labels = c("Var","Mean treated", "Mean not treated", "Avrage treatment effect"))
+
+```
+
+## Part 3. Randomization Tests
+
+### 1
+
+```{r}
+#the answer to everything
+set.seed(42)
+
+#making the permutations of the treat variable (should be 82choose41, but
+# the genperms is making it smaller by approximation)
+permutations <- genperms(df$treat, blockvar=NULL, clustvar=NULL)
+
+#making the probabilty of treatment under randomization
+probs <- genprobexact(df$treat, clustvar = df$SUBJECT)
+
+unique(probs)
+dim(permutations)
+```
+
+### 2
+
+```{r}
+
+EstFunc <- function(df, perms, prob, vars) {
+  #first create Ates that will produce a function that take each column,
+  #and making estimated average treatment effects (ATEs).
+  Ates <- function(vec) {
+    PotentialOutcome <- genouts(vec, df$treat)
+    ATES <- gendist(PotentialOutcome, perms, pr=unique(prob))
+    return(ATES)
+  }
+  #then apply to all the vars
+  ans <- sapply(df[c(vars)], Ates)
+  return(ans)
+}
+
+```
+
+### 3-4
+
+```{r results='asis'}
+
+PvalueTable <- function(df, perm, probs, means_table, vars) {
+  
+
+  #the estimates matrix (we want the absulute values)
+  estimate <- abs(EstFunc(df,perm,probs,vars))
+  
+  #the actual means diffrence between the treat and control
+  actual_diff <- abs(t(means_table["effect"]))
+  
+  #now we want to check how many values are higher (because its absulute we dont     care about the lower)
+  raw_data <- c()
+  for (col in colnames(actual_diff)) {
+    counter <- sum(estimate[,c(col)] >= actual_diff[,c(col)])/10000
+    raw_data <- c(raw_data, counter)
+  }
+  p_value_data <- data.frame(parameter = colnames(actual_diff), p_val =raw_data)
+  #order the p_values
+  p_value_data <- p_value_data[order(p_value_data$p_val),]
+  #the total p_value
+  p_value_data <- rbind(p_value_data, c("Total", round(mean(p_value_data$p_val), 4)))
+  #making the numbers precentages
+  p_value_data$p_val <- percent(as.numeric(p_value_data$p_val))
+  return(p_value_data)
+}
+
+P_val_Total <- PvalueTable(df, permutations, probs, means_table, vars)
+stargazer(t(P_val_Total),type="html",flip=T,title="P-Values for all 14 variables")
+```
+
+### 5
+
+We can see that in total 37% of the treatment effects in the distribution that we created were at least as extreme (either as vigorous or negative).
+
+It means that in total we cannot reject the null hypothesis with good level of confidence (5% or 10%).
+
+But if we will look at the parameters separately, we can see that IQ and college parameters are actually less than 10-5% so we can inference that the treatment actually do make this parameters better - children will go more to school and have a better IQ as we will go down the table below, the P-value is getting higher and therefor a low significant to reject the null hypothesis (like the employed, parent, iep12, hsgrad and jailed parameter).
+
+```{r, echo=FALSE}
+stargazer(means_table,type="text",title="Estimated average treatment effects", digits=2,summary = FALSE, covariate.labels = c("Var","Mean treated", "Mean not treated", "Avrage treatment effect"), out.header=TRUE)
+```
+
+As for the parameters that got 100%, lets remember that in our table with the difference in means in section 2, we saw that this parameters(convicted, felon, jailed, marijuana), have a minimal difference between the treated and not treated.
+
+So we can say that the treatment is effective but not in all the parameters.
+
+### 6
+
+```{r results='asis'}
+#Ive just took the process above and automate it with functions
+PermProbs <- function(table) {
+  permutations <- genperms(table$treat, blockvar=NULL, clustvar=NULL)
+  probs <- genprobexact(table$treat, clustvar = table$SUBJECT)
+  return(list(permutations, probs))
+}
+
+dfMale <- subset(df, df$fem==0)
+dfFemale <- subset(df, df$fem==1)
+
+M_perms_probs <- PermProbs(dfMale)
+F_perms_probs <- PermProbs(dfFemale)
+
+P_val_Males <- PvalueTable(dfMale, M_perms_probs[[1]], M_perms_probs[[2]], means_table_M, vars)
+P_val_Females <- PvalueTable(dfFemale, F_perms_probs[[1]], F_perms_probs[[2]], means_table_F, vars)
+
+stargazer(t(P_val_Males),type="html",flip=T,title="P-Values for all 14 variables-Only Males")
+
+stargazer(t(P_val_Females),type="html",flip=T,title="P-Values for all 14 variables-Only Females")
+```
+
+Lets try to see what are the differences with boys and girls:
+
+It seems like the IQ at younger ages (5, 6) is improved better at boys then girls, but the IQ of girls at older age (15) improved more then boys.
+
+We can see that the employment is impacted more at the boys group then the girls (19.8%\<36.28%).
+
+it looks like the males are more effected by the "crime" parameters than girls (probably because girls from the first place are less involved in crime).
+
+In conclusion there is a slight difference between boys and girls in some variables.

@@ -1,0 +1,379 @@
+---
+title: "PS4"
+author: "Yonatan-Lourie"
+date: "6/9/2021"
+output:
+  html_document:
+    rmarkdown::html_document:
+    theme: journal
+    toc: true
+    toc_depth: 4
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+       
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+
+In this problem set, we will look at DufLo et al. (2011). This paper looks at the effect of
+tracking on educational attainment. "Tracking" means that high-performing and low-performing
+students are separated into two sections. The authors run experiment in which they randomly
+assign 60 out of 120 primary schools in rural Kenya to tracking. In Table 5, the authors explore
+the effects of being in the bottom section of a tracking school. The problem set will focus mostly
+on replicating this table. Some of your estimates will not be exactly the same as those in Table 5
+of the paper, but they should be very close.
+The name of the dataset is forpeerpapers.dta. tracking is a dummy variable that denotes
+whether the student is a tracking school. bottomhalf denotes the dummy variable Bij which is 1
+if the student was assigned to the bottom section and 0 otherwise, percentile denotes Pij which
+is the student's test score percentile at baseline, etpteacher denotes the type of teacher, girl
+denotes gender, agetest denotes age, and stdR_totalscore is standardized test scores.
+
+## Part 1. Introduction
+### 1. 
+Read the introduction of the paper. List three channels through which tracking might
+affect students, according to the authors.
+
+1. Level of studies: Tracking might help the teacher to teach each group in the level of studies that fit to that specific group (basics for low abilities students, and intermediate materials for high abilities students for example).
+
+2. Peer to peer effect: Better students can have a positive impact on worse students. When we divide students into groups according to their abilities - we prevent the possibility of the bad students to get better by interacting with better students.
+
+Tracking students into separate classes by prior achievement could disadvantage low-achieving students while benefiting high-achieving students, thereby exacerbating inequality. if a student is in the low-achieving group, he dont have the opportunity to excel as much as the high-achieving students, because he will not have the right platform (the level of the class).
+
+
+3. The effort of the teacher could be vary by the group of the students. Their are teachers that will invest more effort on a low-achieving group, and their are teachers that will invest more effort on a high-achieving group, depend on the teacher. This will have a direct influence on the students of course.
+
+
+## Part 2. Regression Discontinuity
+
+In Panel A of Table 5, the authors use a regression discontinuity approach to explore the effects
+of being in the bottom section of a tracking school on test scores.
+
+### 1.
+Let's start with Specification 1. This is a classic regression discontinuity, in which the
+authors estimate the below equation, where $\beta_{ij}$ is a dummy for whether or not individual
+i in school j is in the bottom section, $P_{ij}$ is the student's test score percentile at baseline,
+and $X_{ij}$ is a vector of controls (including a constant, type of teacher, gender, and age at
+time of test).
+
+ $(1)\ \ y_{ij} = δB_{ij} + λ_1P_{ij} + λ_2P^2_{ij}  + λ_3P^3_{ij} + X_{ij}β + \epsilon_{ij}$
+
+
+#### (a)
+Explain why δ is a plausible causal estimate of the effect of being in the bottom
+section on educational attainment:
+
+As we learned in the RD class, when the dummy will be  $B=0$, our $y_{ij}$ will be the score of someone that is not in the bottom section. And if $B=1$, y will be the score of someone that is in the bottom section.
+
+$E(Y|B=1,P,X)-E(Y|B=0,P,X)=\delta$
+
+
+#### (b)
+Load the data and create a new data frame that includes tracking schools only
+(tracking==1). You will use this data frame for the rest of the problem set.
+
+
+```{r, message=FALSE, results==hide, warning=FALSE}
+library(tidyverse)
+library(sandwich)
+library(lmtest)
+library(car)
+library(haven)
+library(stargazer)
+library(AER)
+set.seed(42)
+```
+
+```{r}
+df_ <- read_dta("forpeerpapers.dta")
+df <- subset(df_, tracking==1)
+df$constant <- 1
+head(df)
+```
+
+#### (c) 
+Create variables P2 and P3 and estimate Equation 1 to replicate the coefficient
+in Column 1.
+
+```{r}
+model.1 <- lm(data = df, stdR_totalscore~ +bottomhalf+percentile+percentilesq+percentilecub+(etpteacher+girl+agetest))
+
+P2 <- coef(model.1)[3]
+P3 <- coef(model.1)[4]
+coef(summary(model.1))["bottomhalf",c("Estimate","Std. Error")]
+round(coef(summary(model.1)),4)
+```
+
+
+#### (d)
+Estimate the standard error of δ^, using bootstrap and clustering at the school
+level.1 (Hint: Code for doing this using loops has been provided for you on moodle since this is a hard problem. You can also try using the package multiwayvcov
+and the function cluster.boot.)
+
+```{r}
+MyBootstrap <- function(df, B, p, formula, fm0) {
+  formula = as.formula(formula)
+  
+  set.seed(42)
+  # Create a vector with schools IDs.
+  schools <- unique(df$schoolid)
+  
+  # Create a matrix to store our estimates
+  mat <- matrix(NA, nrow = B, ncol = p)
+  
+  # Loop over bootstrap repetitions
+  for (b in 1:B) {
+    # Randomly choose schools
+    i <- sample(1:length(schools), length(schools), replace = TRUE)
+    
+    # Which school are included?
+    inc_school <- schools[i]
+    
+    # Collect data only for the included schools
+    for(j in 1:length(schools)) {
+      if (j == 1) {
+        # Select the school
+        df_boot <- df[which(df$schoolid == inc_school[j]), ]
+        
+        # Create a new school index (because we treat each bootstraped 
+        # school as a different school)
+        df_boot$new <- j
+        
+      } else {
+        # Select the school
+        temp <- df[which(df$schoolid == inc_school[j]), ]
+        
+        # Create a new school index (because we treat each bootstraped
+        # school as a different school)
+        temp$new <- j
+        
+        # Vertically merge dataframes
+        df_boot <- rbind(df_boot, temp)
+      }
+    }
+    
+    # Run the desired model using the bootstrapped dataset
+    model <- lm(
+      formula,
+      data = df_boot
+    )
+    
+    # Store the desired coefficiient
+    mat[b, ] <- model$coefficients
+  }
+  
+  # Report the results
+  c5 <- coeftest(fm0, df = Inf, vcov. = cov(mat))
+  c5[2,]
+  
+  return(round(c5,4))
+
+}
+```
+
+
+
+```{r,cache=TRUE}
+boot1 <- MyBootstrap(df,500,8,"stdR_totalscore ~ bottomhalf + percentile + percentilesq +
+      percentilecub + etpteacher + girl + agetest",model.1)
+boot1
+```
+So the standard error of $\hat{δ}$ is `r  boot1[2,2]`
+
+#### (e) 
+Explain why school fixed effects might be especially important in this context
+(keeping in mind your answer to (a)). Replicate the coefficient in Column 2
+by adding school fixed effects to the model in Equation 1. Report your results
+omitting the coefficients on the school dummies.
+
+$(1)\ \ y_{ij} = δB_{ij} + λ_1P_{ij} + λ_2P^2_{ij}  + λ_3P^3_{ij} + X_{ij}β + \epsilon_{ij}+\nu_j$
+
+```{r}
+model.2 <- lm(data = df, stdR_totalscore~ bottomhalf +percentile+percentilesq+percentilecub+(etpteacher+girl+agetest)+factor(schoolid)-1)
+print("Column (2) in Table 5")
+coef(summary(model.2))["bottomhalf",c("Estimate","Std. Error")]
+
+print("All the coefficients")
+round(coef(summary(model.2))[1:7,],4)
+```
+
+So our estimate for bottomhalf is really similar to the one in Table 5 
+
+school fixed effects will reflect the causal effect of peers’ prior achievement (both direct through peer-to-peer learning,
+and indirect through adjustment in teacher behavior to the extent to which teachers change behavior in response to small random variations in class composition).
+
+#### (f)
+Compute the cluster standard error for $\hat{δ}$ using the bootstrap. Note that, when
+running this regression on the bootstrapped sample you must use the new school
+indexes (df_boot$new in my code) to generate your school fixed effects
+
+```{r cache=TRUE}
+boot2 <- MyBootstrap(df,500,67,"stdR_totalscore~ bottomhalf + percentile + percentilesq +
+      percentilecub + etpteacher + girl + agetest+ factor(new)-1",model.2)
+boot2[1:7,]
+
+```
+So we got $std(\hat{\delta})=$ `r boot2[1,2]`
+
+### 2.
+Now let's move on to Specification 2. Here, the authors estimate something similar to
+Equation 1, except this time, they "estimate a second order polynomial separately on each
+side of the discontinuity" (p. 1754). This amounts to estimating the following equation
+(adding the terms in red to Equation 1)
+ 
+ $(2)\ \ y_{ij} = δB_{ij} + λ_1P_{ij} + λ_2P^2_{ij} +\phi P_{ij}*\beta_{ij}  + \phi P^2_{ij}*\beta_{ij} + X_{ij}β + \epsilon_{ij}$
+
+#### (a)
+Explain why this might change our estimated effect of being in the bottom section.
+
+ $\phi$ is actually the complement of the bottom half (the top half). When we adding an interaction term (we adding for P and P^2), then the effect of having some grade in the top section will be shown as part of $\phi$. Before that, those effects was observed in other covariates (and probably in $\delta$ to), so it will effect $\delta$.
+
+
+#### (b)
+Create the necessary variables and estimate the model in Equation 2.
+
+```{r}
+df$percentile_50 <- df$percentile-50
+df$percentile_50_sq <- (df$percentile-50)^2
+model.3 <- lm(data = df, stdR_totalscore ~ bottomhalf+percentile_50+percentile_50_sq+bottomhalf:percentile_50+bottomhalf:percentile_50_sq+I(etpteacher+girl+agetest))
+summary(model.3)
+```
+
+
+#### (c)
+Replicate the coefficient in Column 3 by predicting the effect of being in the
+bottom section for a student at the 50th percentile.
+
+$E(y|B=1,P=50)=E(y|B=0,P=50) = intercept+\delta+\lambda_1+\lambda_2+\phi_1+\phi_2+\beta-[intercept+\lambda_1+\lambda_2+\beta]=\delta+\phi_1(50-50)+\phi_2(50-50)^2=\delta$
+
+```{r}
+coef(summary(model.3))[2,]
+```
+
+
+
+We got `r coef(model.3)[2] ` which is similar to what we have in column 3.
+
+#### (d)
+Compute clustered standard errors using the bootstrap by adapting the code
+provided.
+
+```{r, cache=TRUE}
+
+boot3 <- MyBootstrap(df,500,7,"stdR_totalscore ~ bottomhalf+percentile_50+percentile_50_sq+bottomhalf:percentile_50+bottomhalf:percentile_50_sq+I(etpteacher+girl+agetest)",model.3)
+round(boot3,4)
+
+```
+
+
+## Part 3. Instrumental Variables
+
+In Panels B and C of Table 5, the authors examine one channel by which being assigned to
+the bottom section might affect attainment: low peer quality. To do this, they use instrumental
+variables. The first stage will regress mean peer score (y¯−ij) on being in the bottom half, which is
+plausibly exogenous when we include controls for the fLexible polynomial of baseline attainment,
+for the reasons discussed in 1a.
+
+The second stage will regress endline scores on mean peer scores, using the predicted values of
+mean peer score from the first stage regression.
+
+$(3)\ \ \bar{y}_{-ij} = δB_{ij} + λ_1P_{ij} + λ_2P^2_{ij}  + λ_3P^3_{ij} + X_{ij}β + \epsilon_{ij}$
+
+### 1. 
+First we will replicate the first stage regression in Panel C Column 1
+
+#### (a)
+Create a new data frame that contains the subset of observations for which none
+of the variables in the model are missing. (Hint: Use na.omit and subset with
+the option select.)
+
+```{r}
+df3 <- na.omit(subset(df, select=c(rMEANstream_std_total,stdR_totalscore, bottomhalf, percentile,percentilesq,percentilecub, etpteacher,girl,agetest,schoolid)))
+
+```
+
+
+#### (b)
+Estimate the first stage by estimating Equation 3 with rMEANstream_std_total
+as your outcome variable.
+
+
+```{r}
+model.4 <- lm(data = df3, rMEANstream_std_total ~ bottomhalf+percentile+percentilesq+percentilecub+(etpteacher+girl+agetest))
+round(coef(summary(model.4)),4)
+```
+
+
+#### (c)
+Compute clustered standard errors using the bootstrap by adapting the code
+provided
+
+```{r, cache=TRUE}
+boot4 <- MyBootstrap(df3,500,8,"rMEANstream_std_total ~ bottomhalf+percentile+percentilesq+percentilecub+(etpteacher+girl+agetest)",model.4)
+boot4
+```
+
+
+### 2. 
+Now let's replicate the second stage regression in Panel B Column 1.
+#### (a) 
+First, do this "manually" by estimating the following:
+
+$(3)\ \ y_{ij} = δ\hat{y}_{-ij} + λ_1P_{ij} + λ_2P^2_{ij}  + λ_3P^3_{ij} + X_{ij}β + U_{ij}$
+where y^−ij are the predicted values of y¯−ij from the first stage regression. To
+estimate y^−ij in R, you can use firststage$fitted.values, where firststage
+is the object that stores the first stage regression.
+```{r}
+df3$firststage <-  model.4$fitted.values
+model.5 <- lm(data = df3, stdR_totalscore ~ firststage+percentile+percentilesq+percentilecub+(etpteacher+girl+agetest))
+round(coeftest(model.5, vcov = vcovHC),4)
+```
+
+
+#### (b) 
+Second, do this using ivreg from the AER package. Type ?ivreg in the console
+to look up the syntax. You should replicate your coefficient from (a) exactly (but
+not the standard error).
+
+```{r}
+model.6 <- ivreg(stdR_totalscore~rMEANstream_std_total+ percentile+percentilesq+percentilecub + (etpteacher+girl+agetest)|bottomhalf+percentile+percentilesq+percentilecub + (etpteacher+girl+agetest), data=df3)
+
+
+
+round(coeftest(model.6, vcov = vcovHC),4)
+
+```
+
+
+#### (c)
+Compute clustered standard errors using the bootstrap by adapting the code
+provided
+
+```{r, cache=TRUE}
+boot5 <- MyBootstrap(df3,500,5,"stdR_totalscore ~ firststage+percentile+percentilesq+percentilecub+I(etpteacher+girl+agetest)-1",model.5)
+boot5
+```
+
+
+### 3.
+When using an instrumental variable, one of the identification assumptions is that the
+instrument is exogenous: Cov(Bij; Uij) = 0. In plain English, this assumption imposes
+that being assigned to the bottom session only impacts your tests scores by changing the
+quality of your peers (y−ij). As consequence, the exogeneity assumption implies that that
+there is no direct impact of being assigned to the bottom session on your own test scores.
+Do you believe this assumption is plausible? Think about what unobservables variables are
+inside the term Uij or about possible direct effects of being assigned to a bottom session.
+
+There is (almost) always more covariates that can affect the assumption that the instrument is exogenous (the question is how significance).
+In our case, it could be:
+1. Low self esteem that will lead to lower test score.
+2. Dislection or other learning disability that havent diagonsted.
+3. Lack of family support
+etc..
+
+The more covraites that we will add to our regression, we can be more sure that $Cov(B_{ij}, U_{ij})$ closer to zero.
+
+
