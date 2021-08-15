@@ -1,0 +1,487 @@
+---
+title: "test"
+author: "Yonatan-Lourie"
+date: "7/22/2021"
+output: 
+  html_document:
+  df_print: paged
+---
+
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+       
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+## TODO: explain about libraries
+```{r, message=FALSE}
+library(tidyverse)
+#for ggplot, and everything else
+
+library(wordcloud2)
+#for the wordcloud
+
+library(usmap)
+#for the usmap
+
+library(gridExtra)
+#to make several ggplot side to side
+
+set.seed(42)
+#for reproducibility 
+```
+
+
+## Q1. Two Armies Simulation (45 pt)
+
+### a.
+(5pt) Describe in words a simulation strategy to estimate E[X] and Var(X), including how would you simulate a battle between the two armies.
+
+I will sample a time from the exponential distribution ($Exp(1)$) so that for every soldier will have a time specific to his index.
+For example: group_a = $\{x_1, x_2,x_3,x_4,x_5,x_6,x_7,x_8,x_9,x_{10}\}$ when each one of the $x_i$ are random variables from the $Exp(1)$.
+I will make a loop that will run until one all the soldiers of on of the group will be dead.
+In each loop, i will sample the shooter who will shoot first(the $Min(x_{group_a}, x_{group_b})$).
+Then i will sample a random target from the uniform distribution $U(1,L)$, when $L$ is the number of living soldiers in the other group.
+The random target will die, and the loop will start again.
+
+
+
+### b.
+```{r}
+
+simulation_b <- function(a_start_len,b_start_len,lambda) {
+
+  #generating the next time shooting for everyone of the soldiers
+  a <- rexp(a_start_len,lambda)
+  b <- rexp(b_start_len,lambda)
+
+  
+  #while there is someone alive in one of the soldiers
+  while (length(a)>0 & length(b)>0) {
+    
+    #check who is the one with the minimum time of shooting
+    fastest_shooter <- which.min(c(a,b))
+
+    #in case he is from a:
+    if ((fastest_shooter) < length(a)+1) {
+      last_time <- a[fastest_shooter]
+      #killing someone randomly (uniformly)
+      to_kill <- rdunif(1,1,length(b))
+      b <- b[-to_kill]
+      #his next time to shoot (from the exponential dist)
+      a[fastest_shooter] <- rexp(1,lambda) +last_time
+    }
+    #in case he is from b:
+    else {
+      last_time <- b[fastest_shooter-length(a)]
+      to_kill <- rdunif(1,1,length(a))
+      a <- a[-to_kill]
+      b[fastest_shooter-length(a)-1] <- rexp(1,lambda) +last_time
+    }
+   
+    
+  }
+  return(max(length(a), length(b)))
+}
+
+```
+
+
+
+```{r, cache=TRUE}
+random_variables <- c()
+for (i in c(1:1000)) {
+  random_variables <- c(random_variables,simulation_b(10,10,1))
+  
+}
+mean(random_variables)
+var(random_variables)
+```
+
+So, our estimates are: $E(X) =$ `r mean(random_variables)`, $Var(X) =$ `r var(random_variables)`
+
+### c.
+
+```{r, cache=TRUE}
+n <- c(10,20,40,80,160,320,640,1280,2560,5120,10240)
+main_sim <- function(n, sim) {
+  
+  X_n <- c()
+  E_n <- data.frame()
+  for(i in n){
+    for(j in 1:100){
+      X_n <- c(X_n,do.call(sim,list(2*i,2*i,1)))
+    }
+    exp_Mean <- mean(X_n)
+    E_n <- rbind(E_n,c(i,exp_Mean))
+  }
+  colnames(E_n) <- c("N","Estimate")
+  return(ggplot(data=E_n, aes(N, Estimate)) + geom_point()+ ggtitle(sim))
+}
+plt_b <- main_sim(n,"simulation_b")
+plt_b
+```
+
+```{r, cache=TRUE}
+n_sqrt <- sqrt(n)
+tmp <- data.frame(n,n_sqrt)
+plt_sqrt <- ggplot(data=tmp, aes(n,n_sqrt)) +geom_point() +ggtitle("sqrt(N)")
+grid.arrange(plt_sqrt, plt_b, ncol=2)
+```
+
+We can see that $\mu_n≈\sqrt{n}$
+
+
+### d. TODO check is its good, check about the start, add explaination why its diffrent
+
+```{r}
+simulation_d <- function(a_start_len,b_start_len,lambda) {
+  #generating the next time shooting for everyone of the soldiers
+  a <- rexp(a_start_len,lambda)
+  b <- rexp(b_start_len,lambda)
+
+  #while there is someone alive in one of the soldiers
+  while (length(a)>0 & length(b)>0) {
+    
+    #check who is the one with the minimum time of shooting
+    fastest_shooter <- which.min(c(a,b))
+
+    #in case he is from a:
+    if ((fastest_shooter) < length(a)+1) {
+      last_time <- a[fastest_shooter]
+      # killing someone randomly (uniformly)
+      to_kill <- rdunif(1,1,length(a))
+      a <- a[-to_kill]
+      if (to_kill != fastest_shooter) {
+        # his next time to shoot (from the exponential dist)
+        a[fastest_shooter] <- rexp(1,lambda) +last_time  
+      }
+      
+    }
+    #in case he is from b:
+    else {
+      last_time <- b[fastest_shooter-length(a)]
+      to_kill <- rdunif(1,1,length(b))
+      b <- b[-to_kill]
+      if (to_kill != fastest_shooter) {
+        b[fastest_shooter-length(a)-1] <- rexp(1,lambda) +last_time  
+      }
+      
+    }
+   
+    
+  }
+  return(max(length(a), length(b)))
+}
+
+```
+
+TODO: similiar to c.
+```{r, cache=TRUE}
+plt_d <- main_sim(n,"simulation_d")
+plt_d
+```
+
+
+
+### e. todo explaiantions
+```{r}
+simulation_e <- function(a_start_len,b_start_len,lambda) {
+  #generating the next time shooting for everyone of the soldiers
+  a <- rexp(a_start_len,lambda)
+  b <- rexp(b_start_len,lambda)
+
+  #while there is someone alive in one of the soldiers
+  while (length(a)>0 & length(b)>0) {
+    
+    #check who is the one with the minimum time of shooting
+    fastest_shooter <- which.min(c(a,b))
+
+    #in case he is from a:
+    if ((fastest_shooter) < length(a)+1) {
+      last_time <- a[fastest_shooter]
+      # killing someone randomly (uniformly)
+      to_kill <- rdunif(1,1,length(a)+length(b))
+      if (to_kill > length(a)) {
+        b <- b[-(to_kill-length(a))]
+      }
+      else {
+        a <- a[-to_kill]
+      }
+       if (to_kill != fastest_shooter) {
+        # his next time to shoot (from the exponential dist)
+        a[fastest_shooter] <- rexp(1,lambda) +last_time  
+      }
+      # his next time to shoot (from the exponential dist)
+      a[fastest_shooter] <- rexp(1,lambda) +last_time
+    }
+    #in case he is from b:
+    else {
+      last_time <- b[fastest_shooter-length(a)]
+      to_kill <- rdunif(1,1,length(a)+length(b))
+      
+      if (to_kill > length(a)) {
+        b <- b[-(to_kill-length(a))]
+      }
+      else {
+        a <- a[-to_kill]
+      }
+       if (to_kill != fastest_shooter) {
+        # his next time to shoot (from the exponential dist)
+        b[fastest_shooter] <- rexp(1,lambda) +last_time  
+      }
+    }
+   
+    
+  }
+  return(max(length(a), length(b)))
+}
+
+```
+
+```{r, cache=TRUE}
+plt_e <- main_sim(n, "simulation_e")
+plt_e
+```
+
+
+
+### f. TODO
+
+```{r}
+simulation_f <- function(a_start_len,b_start_len,lambda) {
+
+  #generating the next time shooting for everyone of the soldiers
+  a <- rexp(a_start_len,lambda)
+  b <- rexp(b_start_len,lambda)
+  
+  #Each zombie will get inside those lists
+  ZombieCounterA <- c()
+  ZombieCounterB <- c()
+  
+  #while there is someone alive in one of the soldiers
+  while (length(a)>0 & length(b)>0) {
+
+    #check who is the one with the minimum time of shooting
+    fastest_shooter <- which.min(c(a,ZombieCounterA,b,ZombieCounterB))
+
+    #in case he is from a:
+    if ((fastest_shooter) < length(a)+length(ZombieCounterA)+1) {
+      #in case he is a zombie:
+      if (fastest_shooter > length(a)) {
+        last_time <- a[fastest_shooter-length(a)]
+        to_kill <- rdunif(1,1,length(b))
+        ZombieCounterB <- c(ZombieCounterB, b[to_kill])
+        b <- b[-to_kill]
+        ZombieCounterA[fastest_shooter-length(a)] <- rexp(1,lambda) +last_time
+      }
+      #in case he is not a zombie:
+      else {
+      last_time <- a[fastest_shooter]
+      #killing someone randomly (uniformly)
+      to_kill <- rdunif(1,1,length(b))
+      ZombieCounterB <- c(ZombieCounterB, b[to_kill])
+      b <- b[-to_kill]
+      #his next time to shoot (from the exponential dist)
+      a[fastest_shooter] <- rexp(1,lambda) +last_time
+    }
+      }
+    #in case he is from b:
+    else {
+      #in case he is zombie:
+      if (fastest_shooter > length(a)+length(ZombieCounterA)+length(b)) {
+        last_time <- a[fastest_shooter-length(a)-length(ZombieCounterA)-length(b)]
+        to_kill <- rdunif(1,1,length(a))
+        ZombieCounterA <- c(ZombieCounterA, a[to_kill])
+        a <- a[-to_kill]
+        ZombieCounterB[fastest_shooter-length(a)-length(ZombieCounterA)-length(b)] <- rexp(1,lambda) +last_time
+      }
+      else {
+        #in case he is not a zombie:
+        last_time <- b[fastest_shooter-length(a)-length(ZombieCounterA)]
+        to_kill <- rdunif(1,1,length(a))
+        ZombieCounterA <- c(ZombieCounterA, a[to_kill])
+        a <- a[-to_kill]
+        b[fastest_shooter-length(a)-length(ZombieCounterA)] <- rexp(1,lambda) +last_time
+      }
+      
+      
+    }
+   
+    
+  }
+  return(max(length(a), length(b)))
+}
+
+```
+
+
+
+
+```{r, cache=TRUE}
+n <- c(10,20,40,80,160,320,640,1280,2560,5120,10240)
+
+
+plt_f <- main_sim(n,"simulation_f") 
+plt_f
+```
+
+
+```{r, cache=TRUE}
+grid.arrange(plt_sqrt, plt_f, ncol=2)
+```
+
+
+## Q2. Analysis and Visualization of Twitter Data (60 pt)
+
+### a.
+(4pt) Download and read the tweets dataset file New-years-resolutions-DFE.csv available here.
+The data represents new year’s resolutions tweets by American users wishing to change something in their life at the stat of the year 2015, downloaded from here.
+
+Make sure that the tweets text column has character type.
+
+Show the top and bottom two rows of the resulting data-frame.
+
+```{r}
+df <- read.csv2("C:\\Users\\Admin\\Desktop\\Studies\\2nd, 2nd\\Data analysis with R\\exam\\data.csv",sep=",")
+typeof(df$text)
+head(df,2)
+tail(df,2)
+```
+
+### b.
+(5pt) Create a new column with tweet times, of class times, with the time of the day for each tweet, in the format: Hours:Minutes:Seconds (see DateTimeClasses for more). For example, the first entry in the column corresponding to the time of the first tweet should be: 10:48:00.
+The class times stores and displays times in the above format, but also treats them as numeric values between zero and one in units of days. For example, the time 10:48:00 corresponds to the value: (10+48/60)/24=0.45.
+
+Make a histogram showing the number of tweets in every hour of the 24 hours in a day (that is, the bins are times between 00:00 and 00:59, between 01:00 and 01:59 etc.).
+
+At which hours do we see the most/fewest tweets?
+
+```{r, cache=TRUE}
+raw_time <- as.POSIXct(df$tweet_created,format="%m/%d/%y %H:%M")
+time <- strftime(raw_time, format="%H:%M:00")
+df$raw_time <- raw_time
+df$time <- time
+df$hour <- strftime(raw_time, "%H")
+ggplot(df, aes(x=hour)) + geom_histogram(stat = "count") +ggtitle("Tweet by Hour")+xlab("Hour") +ylab("Count")
+```
+
+
+
+
+### c. TODO: change sintax and style
+
+(6pt) Plot the distribution of tweets text lengths (in characters) made by females and males separately. Who writes longer tweets?
+Repeat, but this time plot the tweets lengths distribution for tweets in the four different regions of the US
+
+(Midwest, Northeast, South and West). Report the major differences in lengths between regions.
+
+Finally, show the tweets lengths distribution for tweets for the 10 different categories given in Resolution_Category. Report the major differences in lengths between categories.
+
+```{r, cache=TRUE}
+df$length <- str_count(df$text)
+plot_gender <- ggplot(df, aes(length))
+plot_gender + geom_density(aes(fill=factor(gender)), alpha=0.5)+labs(title="Density plot by gender", x="length of tweet")
+
+ggplot(df,aes(x=length,y=gender,fill =  gender))+
+  geom_boxplot()+
+  labs(title="Box plot", subtitle="length of tweet by gender", x="length of tweet")
+
+plot_region <- ggplot(df, aes(length))
+plot_region + geom_density(aes(color=factor(tweet_region)), alpha=0.5)+labs(title="Density plot by region", x="length of tweet")
+
+ggplot(df,aes(x=length,y=tweet_region,fill =  tweet_region))+
+  geom_boxplot()+
+  labs(title="Box plot", subtitle="length of tweet by region", x="length of tweet")
+
+plot_category <- ggplot(df, aes(length))
+plot_category + geom_density(aes(color=factor(Resolution_Category)), alpha=0.5)+labs(title="Density plot by category", x="length of tweet")
+
+ggplot(df,aes(x=length,y=Resolution_Category,fill =  Resolution_Category))+
+  geom_boxplot()+
+  labs(title="Box plot", subtitle="length of tweet by category", x="length of tweet", y = 'category')
+```
+### d. TODO: make prettier, check if everything is right
+(8pt) Compute the number of occurrences of each word in the text of all the tweets. Ignore upper/lower case differences.
+Remove words containing the special characters: #, @, &, -, ., : and ?.
+
+Remove also non-informative words: resolution, rt, 2015 and the empty word.
+
+Plot the top 100 remaining words in a word cloud, using the wordcloud2 package.
+
+```{r, cache=TRUE}
+df$text1 <- tolower(df$text)
+df$text2 <- (gsub("[#@&-.:?]|resolution|2015|rt", "", df$text1))
+wc <- sort(table(unlist(strsplit(tolower(df$text2), " "))), decreasing = TRUE) # word-count for data 
+words_count <-  setNames(data.frame(wc), c("word", "count"))  
+words_count <- words_count[!str_detect(pattern = "^#|^@", string = words_count$word),] # remove hashtags, names 
+wordcloud2(data=words_count[1:100,] , size = 1, shape = 'pentagon', gridSize=10 )
+```
+
+
+### e.
+(8pt) Find for each of the top (most frequent) 100 words from 2.(d.) and each of the 10 tweet categories, the fraction of tweets from this category where the word appears, and list them in a 100×10 table F, with fij indicating the frequency of word i in category j.
+That is, if for example there were 200 tweets in the category Humor, and 30 of them contained the word joke, then the frequency was 0.15.
+
+Finally, for each of the 10 categories we want to find the most characteristic words, i.e. words appearing more frequently in this category compared to other categories:
+
+Formally, compute for each word i and each category j the difference between the frequency in the category and the maximum over frequencies in other categories: dij=fij−maxk≠jfik.
+
+(For example, if the word joke had frequency 0.15 in Humor, and the next highest frequency for this word in other categories is 0.1, then the difference for this word is 0.05).
+
+Find for each category j of the 10 categories the 3 characteristic words with the highest differences dij. Show a table with the 10 categories and the 3 characteristic words you have found for each of them. Do the words make sense for the categories?
+
+
+### f. TODO to check, to change
+```{r, cache=TRUE}
+tweets_by_category <- df %>% 
+                   group_by(Resolution_Category) %>%
+                   summarise(number = n())
+ggplot(tweets_by_category, aes(Resolution_Category,number,fill=Resolution_Category))+geom_bar(stat='identity')+
+  theme(axis.text.x = element_text(angle = -70, hjust = 0))+ scale_fill_brewer(palette="Paired")+labs(title = 'number of tweets by          category',x = 'Categories', y= 'number of tweets')
+
+df_by_region <- df%>% group_split(tweet_region)
+df_midwest <- df_by_region[[1]] %>%
+  group_by(Resolution_Category) %>%
+                   summarise(number = n())
+df_northeast <- df_by_region[[2]] %>%
+  group_by(Resolution_Category) %>%
+                   summarise(number = n())
+df_south <- df_by_region[[3]] %>%
+  group_by(Resolution_Category) %>%
+                   summarise(number = n())
+df_west <- df_by_region[[4]] %>%
+  group_by(Resolution_Category) %>%
+                   summarise(number = n())
+df_2F <- cbind(df_midwest,df_northeast,df_south,df_west)
+df_2F <- subset(df_2F, select = c(1,2,4,6,8))
+colnames(df_2F) <- c('Resolution Category','Midwest','Northeast','South','West')
+df_2F
+```
+
+
+
+### i. TODO: to check. to change
+
+```{r, cache=TRUE}
+tweets_by_state <- df %>% 
+                   group_by(tweet_state) %>%
+                   summarise(number = n())
+usa_df <- data.frame(statepop$abbr, statepop$pop_2015)
+usa_df <- arrange(usa_df,usa_df$statepop.abbr)
+tweets_by_state <- cbind(tweets_by_state,usa_df$statepop.pop_2015)
+colnames(tweets_by_state) <- c('state','tweets','population')
+tweets_by_state$per_million <- round((tweets_by_state$tweets)/(tweets_by_state$population)*1000000,3)
+
+map <- plot_usmap(data = tweets_by_state, values = "per_million", labels = TRUE, label_color = "red", exclude = "DC") + scale_fill_continuous(low = "white", high = "blue", name = "tweets per million")+ labs( title = 'Tweets per state', subtitle = ' Per million people')
+map$layers[[2]]$aes_params$size <- 3
+map
+
+tweets_by_state <- tweets_by_state[!tweets_by_state$state=='DC',]
+tweets_by_state %>% arrange(desc(per_million))%>%
+  top_n(3)
+tweets_by_state %>% arrange(desc(per_million))%>%
+  top_n(-3)
+```
+

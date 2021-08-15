@@ -1,0 +1,629 @@
+---
+title: "52414: Lab 2"
+author: ""
+date: "June 1, 2021"
+output:
+    rmarkdown::github_document:
+    theme: journal
+    toc: true
+    toc_depth: 2
+    df_print: paged
+---
+
+## *Lab 2: Visualization Through `ggplot`*  
+<br/><br/>  
+  
+
+**Contents**:  
+
+* [Q0. Submission Instructions](#submission-instructions)  
+* [Q1. Basic Statistics (30 pt)](#basic-statistics)      
+* [Q2. Scouting Report (30 pt)](#scouting-report)    
+* [Q3. Model Building (30 pt)](#model-building)
+* [Q4. Fix Problematic Plots (10 pt)](#fix-problematic-plots)  
+
+<br/><br/>
+  
+  
+### Q0.Submission Instructions  
+  
+This lab will be submitted in pairs using GitHub (if you don't have a pair, please contact us).  
+Please follow the steps in the  [GitHub-Classroom Lab 2](https://classroom.github.com/g/6_Wy5z44) to create your group's Lab 2 repository.  
+**Important: your team's name must be `FamilyName1_Name1_and_FamilyName2_Name2`**.  
+You can collaborate with your partner using the git environment; You can either make commits straight to master, or create individual branches (recommended). However, once done, be sure to merge your branches to master - you will be graded using the most recent *master* version - your last push and merge before the deadline.   
+**Please do not open/review other peoples' repositories - we will be notified by GitHub if you do.**
+
+Your final push should include this Rmd file (with your answers) together with the html file that is outputted automatically by knitr when you knit the Rmd. Anything else will be disregarded. In addition, please adhere to the following file format:    
+`Lab_2_FamilyName1_Name1_and_FamilyName2_Name2.Rmd/html`      
+
+Some questions may require data wrangling and manipulation which you need to decide on. <br>
+In some graphs you may need to change the graph limits. If you do so, please include the outlier 
+points you have removed in a separate table.
+
+Show numbers in plots/tables using standard digits and not scientific display. That is: 90000000 and not 9e+06. <br>
+Round numbers to at most 3 digits after the dot - that is, 9.456 and not 9.45581451044
+
+
+The required libraries are listed below the instructions. You are allowed to add additional libraries if you want. 
+If you do so, *please explain what libraries you've added, and what is each new library used for*. 
+
+#### Background: 
+
+You've been hired as a data analyst at at football (soccer) club. 
+Since this is a small and under-funded club, you will not have access to real-football data, but to data from 
+the football computer game fifa18. Your job is to analyze this dataset and extract meaningful insights from the data in order 
+to help your club make better decisions. 
+
+#### Data File: 
+You will load and analyze the fifa18 football dataset file called "fifa_data.csv". <br> 
+The dataset contains detailed information about each player in the game, including: names, age, nationality, overall ability, estimated potential ability, current club and league, market value, salary (wage), ability at different football skills (also called 'attributes', e.g. Ball.control, Sprint.speed ...), ability to play at different position in the game (CF, CM, ...) and the preferred positions of the player. 
+
+
+
+Required Libraries:
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(scales)   # needed for formatting y-axis labels to non-scientific type
+library(radarchart)
+library(tidyr)
+library(tidyverse)
+library(reshape2) # melt
+library(ggthemes)
+library(rworldmap) # world map
+library(modelr)
+library(radarchart) #Spider chart
+############################################
+library(e1071) #Q1.c -  skewness() and kurtosis()
+library(grid) # geom_segment
+library(ggrepel)# Use ggrepel::geom_label_repel
+
+
+options("scipen"=100, "digits"=4)  # avoid scientific display of digits. Take 4 digits. 
+theme_set(theme_gray())
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+```
+
+
+<br/><br/>
+
+# Lab 2
+
+## Q1. Basic Univariate Statistics (30 pt)         
+
+First, you are requested to load the fifa18 dataset and find and display general information about the players. 
+
+Loading the data:
+```{r}
+# fifa_players <- data.frame(read.csv(url("https://raw.githubusercontent.com/DataScienceHU/DataAnalysisR_2020/master/data/fifa_data.csv")))
+fifa_players <- data.frame(read.csv("C:/Users/Admin/Desktop/Studies/2nd, 2nd/Data analysis with R/fifa_data.csv"))
+# Pre-processing: 
+for (i in c(3,6,7,10:71)) {
+  fifa_players[,i]<-as.numeric((fifa_players[,i]))
+}
+fifa<-na.omit(fifa_players)
+fifa_players <- fifa
+fifa_players_info <- fifa[,c(1:11)] # players general info 
+fifa_players_attribures <- fifa[,c(1,12:45, 6)] # players different skills. Add overall
+fifa_players_positions <- fifa[,c(1,46:72,6,7)] # players ability at different positions . Add overall 
+fifa_players_indicators <- fifa[,c(1,6,7,10,11)] # players general ability 
+
+```
+
+### a.
+Make a plot showing the `overall` ability distribution of all players.
+How skewed is the distributions? does it have fat tails?  <br>
+Plot on top of the `overall` distribution a Normal distribution matching its first two moments. Is the distribution described well by a Normal distribution? explain. 
+
+```{r}
+fifa %>% 
+  ggplot(aes(Overall)) + 
+  geom_density(alpha=.2, fill= "#007CFF")+ stat_function(fun = dnorm, args = list(mean = mean(fifa_players$Overall), sd = sd(fifa_players$Overall)), col="red", lwd = 1) +ggtitle("Players Overall density")
+
+
+skewness <-  function(x) {
+ m3 <- mean((x - mean(x))^3)
+ skewness <- m3/(sd(x)^3)
+ skewness
+}
+
+Skew_overall <- skewness(fifa$Overall)
+
+qqnorm(fifa$Overall)
+qqline(fifa$Overall, col = "red", lwd = 2)
+```
+We can see that the Overall is distributed pretty normally. From the qqplot we can see that we have a little bit of a fat tail, meaning that compared to the normal distribution there is more data located at the extremes of the distribution and less data in the center of the distribution. 
+In terms of quantiles this means that the first quantile is much less than the first theoretical quantile and the last quantile is greater than the last theoretical quantile. This trend is reflected in the corresponding Q-Q plot.
+
+The skewness is `r Skew_overall` which is good, because we know that the skewness for a normal distribution is 0.
+
+### b.
+
+Make a plot comparing the multiple `overall` ability *distributions* of players according to the `continent` of the players.  Describe which continents have especially good/bad players. 
+
+```{r}
+fifa$Continent <- factor(fifa$Continent)
+ggplot(fifa, aes(Overall)) +geom_density(aes(fill= Continent), alpha=0.24) +xlab("Players Overall ability")+
+  ylab("density")+ggtitle("Players overall density")
+```
+```{r}
+ggplot(data=fifa, aes(x=Overall, group=Continent, fill=Continent)) +
+    geom_density(adjust=1.5) +
+    facet_wrap(~Continent) +
+  geom_vline(data = plyr::ddply(fifa, "Continent", summarize, Overallz = mean(Overall)), aes(xintercept=Overallz), col="red")
+  
+```
+In the first graph, is not that easy to understand whats going on. When we look at the second graph, we can see much clearer each distribution - but its hard to compare between each of them.
+Lets try to visualize the results with a boxplot:
+
+```{r}
+ggplot(fifa,aes(x=Continent,y=Overall))+
+  geom_boxplot()+
+  ylab("Overall")+
+  coord_flip()
+```
+
+
+Recall that we looking for the continent with the highest overall mean with low variance.
+Now we can see clearly that the highest mean is in Africa and South America.
+
+
+### c.
+Make a plot showing the density of players' `value` distribution. <br>
+Next, make a separate plot showing the density distribution of the *log* of players' `value`. <br>
+Which of the two visualizations is better? explain. 
+
+```{r, warning=FALSE}
+fifa %>% 
+  ggplot(aes(Value)) + 
+  geom_density(alpha=.2, fill= "#007CFF")
+
+ggplot(data = fifa,aes(x=Value))+
+  scale_x_continuous(trans='log10') +  # plot on log-scale 
+  geom_density(alpha=.2, fill= "#007CFF")+
+  labs(title="Players Value Distribution (log-scale)")
+
+
+```
+The problem in the first plot is that their a small amount of players with a very high value in comparison to most of the players.
+The log function is making the diffrences more clearer (specially with data with outliers), and we can see the trends much more clearer.
+
+In the first plot it is hard to see the trends of the value of the players. The differences in the value of the players are high, so there is a “drop” in the plot that makes it impossible to notice subtle trends. The log function makes the differences become less significant and the trends become more “smooth” and therefore easier to analyze.
+
+### d.
+
+Are the top-10 players with the highest `value` also the top-10 best players in terms of `overall` ability? 
+Show tables for both and compare. <br> 
+Who is the best player not in the top-10 valued players?  
+
+```{r}
+TopByValue <- fifa  %>% 
+  top_n(10, Value) %>% 
+  arrange(-Value)%>%
+  dplyr::select(Name, Value, Overall)
+TopByOverall <- fifa %>%  
+  top_n(10, Overall) %>%
+  arrange(-Overall) %>%
+  dplyr::select(Name, Value, Overall)
+
+
+
+knitr::kable(TopByOverall, caption = "Top by overall")
+knitr::kable(TopByValue, caption = "Top by Value")
+```
+The top 10 players by value and overall are not particular the same, but there is 8 players in common.
+
+```{r}
+`%!in%` <- Negate(`%in%`)
+BestPlayersNotValues <- TopByOverall[c(TopByOverall$Name %!in% TopByValue$Name),]$Name
+
+
+subset(TopByOverall,Name %in% BestPlayersNotValues)
+
+
+```
+The best players that are not in top 10 valued are `r BestPlayersNotValues`.
+Which means that the best player (in terms of Overall) is M. Neuer,
+
+
+### e. 
+Show a table of the *10* *youngest* and *10* *oldest* teams in terms of *average* players `age`. 
+
+Youngest teams:
+
+```{r}
+mean_age <- fifa %>% group_by(Club) %>% summarise(mean=mean(Age))
+arrange(mean_age, mean)[1:10,]
+```
+
+Oldest teams:
+
+```{r}
+arrange(mean_age, -mean)[1:10,]
+```
+
+
+
+PLEASE ADD YOUR SOLUTION BELOW, WITH A CLEAR SEPARATION BETWEEN THE PARTS!
+
+
+## Q2. Scouting Report (30 pt)
+
+You are in charge of the scouting division. The goal of this division is to follow players' `potential` and `overall` ability, and identify undervalued players - that is, players whose current value is lower compared to what would be expected based on their predicted future ability. 
+
+### a. 
+Plot the *average* `potential` ability by `age` of all players, for players 35 years old or younger
+
+```{r}
+q2a <- fifa_players %>% filter (Age < 36)
+q2a <- aggregate(Potential ~ Age,q2a, FUN = mean)
+#plot(q2a)
+ggplot(q2a, aes(x = Age, y = Potential)) + stat_summary(fun = "mean", geom = "bar")
+```
+
+
+### b. 
+Plot the *average difference* between a player's `overall` ability to `potential` ability as a function of `age`, up to age 35. At what ages should we expect to find players for future development based on this graph?  
+
+```{r}
+q2b <- fifa_players[c("Age","Potential","Overall")]
+
+q2b <- q2b %>% filter (Age < 36)
+q2b["diff"] <- abs(q2b ["Overall"]- q2b ["Potential"])
+
+ggplot(q2b, aes(x = Age, y = diff)) + stat_summary(fun = "mean", geom = "bar")
+
+```
+
+
+### c. 
+We are seeking young ($age \leq 21$) players with high `potential` ($>70$). Show a scatter plot of these players comparing their `potential` ability (x-axis) and current `value` (y-axis). <br>
+Find the 10 most-undervalued players, i.e. having the lowest `value` compared to their predicted value by `potential` using a simple linear regression model. <br>
+Calculate for each of them what is a fair `value` matching their `potential` that you be willing to pay in order to by them to your club and show these 10 players with their name, `age`, `overall` ability, `potential`, actual `value` and fair `value` it a table.
+
+```{r}
+q2c <- fifa_players[c("Name" ,"Age","Potential","Overall","Value")]
+q2c <- q2c %>% filter (Age < 22)
+q2c <- q2c %>% filter (Potential > 70)
+ggplot(q2c, aes(x = Potential, y = Value)) +geom_point()
+
+reg3 <- lm(q2c$Value~q2c$Potential)
+q2c["diff"] <- reg3$fitted.values-q2c$Value
+#top_players
+head(arrange(.data = q2c,desc(diff)),10)
+#summary(reg3)
+```
+
+
+### d. 
+Your boss wants to fly abroad to recruit promising players. Use the `rworldmap` package to display the world map and color each country based on the *median* `potential` of players from this nationality. 
+
+
+```{r}
+# q2d <- aggregate(Potential ~ Nationality,fifa_players, FUN = mean)
+# visitedMap <- joinCountryData2Map(q2d,joinCode = "NAME" ,nameJoinColumn = "Nationality",verbose = F)
+# mapCountryData(mapToPlot = visitedMap,nameColumnToPlot = "Median")
+
+```
+
+### e. 
+Repeat the above analysis but this time display a world map where each country is colored by the *median ratio* of `potential` to `value` of players. Find an under-valued country you'd recommend to travel to (i.e. a country with cheap players compared to their `potential` average quality). 
+
+
+
+PLEASE ADD YOUR SOLUTION BELOW, WITH A CLEAR SEPARATION BETWEEN THE PARTS!
+
+
+## Q3. Correlations Analysis (30 pt)
+
+In this question we find and display different skills and their correlations
+
+### a. TODO:
+need to LEVADE with others.
+
+We are interested in finding out which positions are similar in terms of players' performance.  
+Extract the 26 non-goalkeeper positions (`CAM, CB, ..., ST`). 
+Calculate the correlation between players' ability in each pair of positions and show a heatmap correlation-plot of the correlations' matrix. What three positions have the *least* average correlations with other skills? <br>
+
+```{r}
+cex.before <- par("cex")
+par(cex = 0.7)
+skills <- fifa_players_attribures[c(2:35)]
+PositionsCorr <- cor(fifa_players_positions[c(2:27)])
+
+corrplot(PositionsCorr, type="lower", method="circle", bg="grey92", 
+             order="hclust", addrect=4, cl.lim=c(-1, 1))
+
+mtext("Pairwise correlations between Positions", at=24, line=-0.5, cex=1)
+
+```
+
+It looks like we cant get insights from this graph, so i tried to scale the range of the corrplot:
+
+```{r}
+cex.before <- par("cex")
+par(cex = 0.7)
+#function that scaling the range of the corrplot
+CorrScale <- function(corr) {
+    a = 2 / (max(corr) - min(corr))
+    b = 1 - (2 / (1 - (min(corr) / max(corr))))
+    y = a * corr + b
+    return(y)
+}
+
+corrplot(CorrScale(PositionsCorr),title="Pairwise correlations between Positions",is.corr=FALSE, order="hclust")
+```
+
+
+
+We can see that that the three position with the least average correlations (negative correlation) with other skills are:
+RCB, CB, LCB.
+
+lets be sure:
+```{r}
+cor_position_skills <- as.data.frame(cor(fifa_players_positions[c(2:27)]))
+sort(rowMeans(cor_position_skills),decreasing = F) %>% head(3)
+```
+
+We are interested in finding out which skills are similar in terms of players' performance at the position. 
+Extract the 29 skills for non-goalkeeper players (Acceleration, ..., Volleys, except 'GK.*' skills). 
+Calculate the correlation between players' ability in each pair of skills and show a heatmap correlation-plot of the correlations' matrix. What two skills seem least correlated with other skills? 
+
+```{r}
+cex.before <- par("cex")
+par(cex = 0.7)
+SkillsNgk <-  skills[!grepl("^GK", names(skills))]
+
+
+corrplot(cor(SkillsNgk), title="Pairwise correlations between Skills",is.corr=FALSE, order="hclust")
+```
+It looks like Jumping and strength are the less correlate with other skills, lets check it:
+```{r}
+cor_skills <- as.data.frame(cor(SkillsNgk))
+sort(rowMeans(cor_skills),decreasing = F) %>% head(2)
+```
+
+
+### b. 
+Consider the following indicators of players performance: `overall` players' performance, their `potential`, their salary (`wage`) and their market `value`. Show a correlation-plot of players' *34* skill levels (`Acceleration`, ..., `Volleys`) vs. these four indicators. Find the *10* skills with the highest *average* correlation with the four inidcators and list them in a table.   
+
+```{r}
+cex.before <- par("cex")
+par(cex = 0.7)
+
+indicators <- c("Overall", "Potential", "Wage", "Value")
+performance <- fifa[indicators]
+corrplot(CorrScale(cor(skills,performance)),title = "performance corrlation",  cl.ratio = 1)
+```
+
+
+```{r}
+cor_skills_indicators <- as.data.frame(cor(skills,performance))
+ans <- data.frame(sort(rowMeans(cor_skills_indicators),decreasing = T) %>% head(10))
+names(ans) <- "mean"
+ans
+```
+
+
+### c.
+
+Build a team of *11 different* players with the following rules: <br>
+- For each of the *26* non-goalkeaper positions (*26* from above plus goalkeaper, `GK`), find the player with the best performance at this position. <br>
+- Find the goal keaper (`Preffered.Positions` is `GK`) with the best `overall` performance. <br>
+- From the players obtained above, find *11 distinct* players maximizing the average `overall` performance of the team, 
+with the constraint that there must be a goalkeaper (preferred position `GK`). <br>
+- List the players in a table including their `overall` performance and the team average `overall` score. <br>
+Next, peak six *different* players of your choice from your team, one of which is the goalkeaper. Using the function `radarchart::chartJSRadar`, graph their abilities (individually for all 6 players) in the top *10* skills according to 3.b in a [radar chart](https://en.wikipedia.org/wiki/Radar_chart) (also called 'spider chart')  graph. See below an example for such a chart.
+
+```{r}
+positions <- fifa_players_positions[c(1:27)]
+pos_names <- names(positions)[2:27]
+
+```
+
+Best Goal keeper:
+```{r}
+GK <- subset(fifa,grepl("GK",Preferred.Positions))
+GK[which.max(GK$Overall),c("Name", "Overall")]
+```
+
+Function to build the team:
+
+```{r}
+TeamCandidates <- function(df=fifa, positions){
+  team = data.frame()
+  
+  for (pos in positions) {
+    col_number = which(names(df) == pos)
+    Candidates = df[which(df[,col_number]==max(df[,col_number]) ),] 
+    if (nrow(Candidates)>1) {
+      Candidates = Candidates[which.max(Candidates$Overall),] 
+    }
+    df = df[-which(df$ID == Candidates$ID),] 
+    
+    if (nrow(team)==0) {
+      team = Candidates
+    }
+    else{
+      team = rbind(team,Candidates)
+    }
+  }
+  return(team)
+}
+
+
+
+```
+
+Building the team:
+
+```{r}
+Besteam <-  TeamCandidates(positions = pos_names)
+
+BestPlayersID <- Besteam[,c("ID","Name","Overall",names(fifa_players_attribures[,c(2:35)]))]  %>% as.data.frame()
+BestPlayers <- Besteam[,c("Name","Overall",names(fifa_players_attribures[,c(2:35)]))]  %>% as.data.frame()
+
+BestPlayers <- gather(BestPlayers, key=Label, value=Score, -Name) %>%
+  spread(key=Name, value=Score)
+
+BestPlayers <- data.frame(t(BestPlayers))
+
+names(BestPlayers) <- as.matrix(BestPlayers[1, ])
+BestPlayers <- BestPlayers[-1, ]
+BestPlayers[] <- lapply(BestPlayers, function(x) type.convert(as.character(x)))
+BestPlayers <- tibble::rownames_to_column(BestPlayers, "Name")
+BestPlayers <- arrange(BestPlayers, -Overall)[1:10,c(1,24)]
+BestPlayers <- rbind(BestPlayers,GK[which.max(GK$Overall),][,c("Name", "Overall")])
+
+
+avg  <- data.frame(Name = "average" ,Overall = mean(BestPlayers$Overall))
+BestPlayers <- rbind(BestPlayers,avg)
+BestPlayers
+```
+
+
+```{r}
+BestPlayersID <- merge(BestPlayers, BestPlayersID, by="Name")[,c(1:3)]
+names(BestPlayersID) <- c("Name", "Overall", "ID")
+BestPlayersID <- rbind(BestPlayersID,GK[which.max(GK$Overall),][,c("Name", "Overall","ID")])
+
+```
+
+
+```{r}
+
+
+
+TenSkills <- rownames(ans)
+ReadyToChart <-  arrange(subset(fifa, ID %in% BestPlayersID$ID),-Overall)[c(1:6),c("Name", TenSkills)]
+
+
+ReadyToChart <- data.frame(t(ReadyToChart))
+names(ReadyToChart) <- as.matrix(ReadyToChart[1, ])
+ReadyToChart <- ReadyToChart[-1, ]
+ReadyToChart[] <- lapply(ReadyToChart, function(x) type.convert(as.character(x)))
+ReadyToChart <- tibble::rownames_to_column(ReadyToChart, "Label")
+
+allchart <- chartJSRadar(scores = ReadyToChart, maxScale = 100, showToolTipLabel = TRUE)
+allchart
+
+```
+
+```{r}
+chartJSRadar(scores = ReadyToChart[,c(1,2)], maxScale = 100, showToolTipLabel = TRUE)
+chartJSRadar(scores = ReadyToChart[,c(1,3)], maxScale = 100, showToolTipLabel = TRUE)
+chartJSRadar(scores = ReadyToChart[,c(1,4)], maxScale = 100, showToolTipLabel = TRUE)
+chartJSRadar(scores = ReadyToChart[,c(1,5)], maxScale = 100, showToolTipLabel = TRUE)
+chartJSRadar(scores = ReadyToChart[,c(1,6)], maxScale = 100, showToolTipLabel = TRUE)
+chartJSRadar(scores = ReadyToChart[,c(1,7)], maxScale = 100, showToolTipLabel = TRUE)
+```
+
+
+### d.
+We are interested in determining how the player’s abilities in different positions changes with age. Repeat the analysis of question 2.a., but this time show the 26 different positions (except goal-keaper). Abilities in which positions peak at youngest/oldest ages?
+
+
+```{r}
+PositionAge <- left_join(positions, fifa_players[,c(1,3)], by="ID")[-1]
+aggPositionAge <-  aggregate(.~ Age, data= PositionAge, FUN = mean)
+
+result_table <- aggPositionAge %>%  gather(skills, value, -Age)
+
+ggplot(data=result_table, aes(x=Age, y=value, group=skills)) + 
+  geom_line()+ 
+  ggtitle("Player's mean Position ability VS Age") + 
+  facet_wrap(~skills) + 
+  theme(legend.position="none") 
+```
+
+```{r}
+PositionAge<-left_join(positions, fifa_players[,c(1,3)], by="ID")[-1]
+PositionAge <- filter(.data = PositionAge, Age <= 35)
+# mean function on skills
+MeanPos <- aggregate(. ~ Age, data = PositionAge, FUN = mean)
+# Convert an object into a molten data frame.
+PosAge <-melt(MeanPos,"Age")
+
+ggplot(data=PosAge, aes(x=Age, y=(value), group=variable)) + 
+  geom_line(aes(col=variable)) + 
+  ggtitle("Player's abilities in different positions changes with age") + 
+  facet_wrap(~variable)+ theme(legend.position="none")
+```
+It looks like the shape of the graphs are pretty similiar, wgucg means that when the players are very young (16) - their performance is going down, and before the age of 17 they are getting better.
+The positions "CB", "CDM","RCB","RDM" are getting lower in a higher age repectivley to other positions. Most of the abilities are are in the peak at the Age of 25-30.
+
+### e. 
+Your boss suggests that some players may be currently under-payed compared to their performance,
+and that we can acquire them by offering them a higher salary (`wage`).  <br>
+Fit a multiple regression model predicting player's `overall` performance based on their `wage` and `age`. <br>
+Find the $10$ players with the highest difference between their `overall` performance level and the regression model prediction, 
+and list them in a table. 
+
+```{r}
+
+model <- lm(data=fifa, Overall ~ Age+Wage)
+predictions <- predict(model, fifa[,c("Age", "Wage")])
+fifa$OverallPred <- predictions
+fifa$diff <- abs(predictions-fifa$Overall)
+arrange(fifa, -diff)[,c("Name", "Overall", "OverallPred", "diff")][1:10,]
+```
+
+
+
+PLEASE ADD YOUR SOLUTION BELOW, WITH A CLEAR SEPARATION BETWEEN THE PARTS!
+
+
+
+## Q4. Fix Problematic Plots (10 pt)
+
+The previous data-analyst of the club was fired for producing poor plots. 
+See below two bar plots that he made including their code. 
+
+### a. 
+Describe in your own words what did your predecessor try to show in each of the two plots. 
+### b.
+Find *at least* three *different* problematic issues with his plots, and explain them. 
+### c.
+Fix the problematic issues above in the code below to generate new, improved plots. <br>
+You will get an additional *bonus* point for finding any additional problem and fixing it.  
+(identifying the *same* problem in the two plots counts as *one* problem).
+
+
+```{r}
+# A measure of category's diversity
+DIV <- function(category_vec){
+  t <- table(category_vec)
+  p <- t/sum(t)
+  return(sum(p^2))
+}
+
+cleaned_data <- fifa_players %>% select(Nationality,Club) %>% na.omit()
+
+number_of_nationality_in_club <- cleaned_data %>% group_by(Club, Nationality) %>% summarise(count = n()) %>% group_by(Club) %>% summarise(N_nation=n()) %>% arrange(desc(N_nation)) %>% mutate(Club = factor(Club, level=unique(Club)))
+
+DIV_in_club <- cleaned_data %>% group_by(Club) %>% summarise(DIV = DIV(Nationality))%>% arrange(DIV)%>% mutate(Club = factor(Club,level=unique(Club)))  # arrange(desc(DIV)) %>% 
+
+# Plot number of different nationalities in each club
+g <- ggplot(data = number_of_nationality_in_club %>% head(8), aes(x = Club, y = N_nation,color = Club))
+g + geom_bar(stat="identity")
+
+# Plot DIV (diversity?) of different nationalities in each club
+g <- ggplot(data = DIV_in_club %>% head(12),aes(x = Club,y = DIV, color = Club))
+g <- g + geom_bar(stat="identity")
+g
+```
+
+
+PLEASE ADD YOUR SOLUTION BELOW, WITH A CLEAR SEPARATION BETWEEN THE PARTS!
+
+
+
+
+
