@@ -1,0 +1,24 @@
+yonatan.lourie
+204767644
+
+The whatever player, is choosing randomly x coordinate and y coordinate, and as long he didn't
+succeed to place a mark on the board, he will try until he wil succeed.
+
+The clever player knows that whatever player is playing randomly.
+The clever player has done some probability courses, and he knows that in average,
+he will get more victors if he'll just trying to fill his marks in a row.
+So this player is trying to mark row by row until he get failed.
+
+Results:
+CleverPlayer Vs WhateverPlayer:
+=== player 1: 474 | player 2: 26 | Draws: 0 ===
+
+CleverPlayer Vs SnartypamtsPlayer:
+=== player 1: 0 | player 2: 500 | Draws: 0 ===
+
+SnartypamtsPlayer vs WhateverPlayer:
+=== player 1: 484 | player 2: 16 | Draws: 0 ===
+
+
+WhateverPlayer vs WhateverPlayer:
+=== player 1: 4941 | player 2: 5017 | Draws: 42 ===
