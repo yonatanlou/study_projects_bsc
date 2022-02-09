@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>/Volumes/GoogleDrive/My Drive/Studies/3d, 1st/OOP_Java/LabsOOP/pepse/src</OriginalElement>
+  <nodes>
+    <node x="1228.6234154013528" y="59.0">pepse.world.trees.Leaf</node>
+    <node x="483.7514367816094" y="298.0">pepse.world.Sky</node>
+    <node x="899.7514367816093" y="563.6769547325102">PepseGameManager</node>
+    <node x="371.13175228229517" y="388.3882030178326">pepse.world.daynight.SunHalo.Component</node>
+    <node x="447.7514367816094" y="59.0">pepse.world.daynight.Sun</node>
+    <node x="908.7514367816094" y="276.0">pepse.world.Avatar</node>
+    <node x="1794.8701870772436" y="103.0">pepse.world.Terrain</node>
+    <node x="395.14375502577946" y="177.00754458161867">pepse.world.daynight.SunHalo</node>
+    <node x="1967.7514367816093" y="298.5">pepse.world.trees.Tree</node>
+    <node x="1506.7514367816093" y="309.5">pepse.world.daynight.Night</node>
+    <node x="1150.7514367816093" y="-54.69410150891632">pepse.world.Block</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="pepse.world.trees.Leaf" target="pepse.world.Block" relationship="GENERALIZATION">
+      <point x="0.0" y="-81.5" />
+      <point x="1395.1234154013528" y="33.0" />
+      <point x="1197.7514367816093" y="33.0" />
+      <point x="0.0" y="14.0" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.Sky" relationship="DEPENDENCY">
+      <point x="-198.66666666666663" y="-59.5" />
+      <point x="827.2232510288068" y="563.6769547325102" />
+      <point x="827.2232510288068" y="448.0" />
+      <point x="685.7514367816094" y="448.0" />
+      <point x="0.0" y="38.0" />
+    </edge>
+    <edge source="pepse.world.trees.Tree" target="pepse.world.trees.Leaf" relationship="CREATE">
+      <point x="-55.25" y="-37.5" />
+      <point x="2023.0014367816093" y="275.0" />
+      <point x="1678.126436781609" y="275.0" />
+      <point x="1678.126436781609" y="265.0" />
+      <point x="1395.1234154013528" y="265.0" />
+      <point x="0.0" y="81.5" />
+    </edge>
+    <edge source="pepse.world.Terrain" target="pepse.world.Block" relationship="CREATE">
+      <point x="0.0" y="-37.5" />
+      <point x="1905.3701870772436" y="59.0" />
+      <point x="1859.817528735632" y="59.0" />
+      <point x="1859.817528735632" y="49.0" />
+      <point x="1229.0847701149426" y="49.0" />
+      <point x="31.333333333333314" y="14.0" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.daynight.SunHalo" relationship="DEPENDENCY">
+      <point x="-198.66666666666663" y="-59.5" />
+      <point x="874.701303155007" y="563.6769547325102" />
+      <point x="874.701303155007" y="448.0" />
+      <point x="900.2990397805213" y="448.0" />
+      <point x="900.2990397805213" y="275.0" />
+      <point x="751.3937550257795" y="275.0" />
+      <point x="118.75" y="26.5" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.Terrain" relationship="TO_ONE">
+      <point x="0.0" y="-59.5" />
+      <point x="1969.5" y="563.6769547325102" />
+      <point x="1969.5" y="265.0" />
+      <point x="1831.7035204105769" y="265.0" />
+      <point x="-73.66666666666669" y="37.5" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.Terrain" relationship="CREATE">
+      <point x="198.66666666666663" y="-59.5" />
+      <point x="2133.5014367816093" y="563.6769547325102" />
+      <point x="2133.5014367816093" y="448.0" />
+      <point x="2211.5" y="448.0" />
+      <point x="2211.5" y="275.0" />
+      <point x="1979.0368537439103" y="275.0" />
+      <point x="73.66666666666674" y="37.5" />
+    </edge>
+    <edge source="pepse.world.Avatar" target="pepse.world.Block" relationship="DEPENDENCY">
+      <point x="0.0" y="-60.0" />
+      <point x="1197.7514367816093" y="59.0" />
+      <point x="915.626436781609" y="59.0" />
+      <point x="915.626436781609" y="49.0" />
+      <point x="1166.418103448276" y="49.0" />
+      <point x="-31.333333333333343" y="14.0" />
+    </edge>
+    <edge source="pepse.world.trees.Tree" target="pepse.world.Block" relationship="CREATE">
+      <point x="-55.25" y="-37.5" />
+      <point x="2023.0014367816093" y="275.0" />
+      <point x="1678.126436781609" y="275.0" />
+      <point x="1678.126436781609" y="265.0" />
+      <point x="1766.626436781609" y="265.0" />
+      <point x="1766.626436781609" y="59.0" />
+      <point x="1859.817528735632" y="59.0" />
+      <point x="1859.817528735632" y="49.0" />
+      <point x="1229.0847701149426" y="49.0" />
+      <point x="31.333333333333314" y="14.0" />
+    </edge>
+    <edge source="pepse.world.daynight.SunHalo.Component" target="pepse.world.daynight.SunHalo" relationship="INNER_CLASS">
+      <point x="0.0" y="-26.5" />
+      <point x="425.0638510477273" y="388.3882030178326" />
+      <point x="425.0638510477273" y="293.6395747599451" />
+      <point x="435.7847015278371" y="293.6395747599451" />
+      <point x="435.7847015278371" y="230.00754458161867" />
+      <point x="-118.75" y="26.5" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.trees.Tree" relationship="CREATE">
+      <point x="198.66666666666663" y="-59.5" />
+      <point x="2133.5014367816093" y="563.6769547325102" />
+      <point x="55.25" y="37.5" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.trees.Tree" relationship="TO_ONE">
+      <point x="0.0" y="-59.5" />
+      <point x="1969.5" y="563.6769547325102" />
+      <point x="1969.5" y="438.0" />
+      <point x="2023.0014367816093" y="438.0" />
+      <point x="-55.25" y="37.5" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.Avatar" relationship="DEPENDENCY">
+      <point x="-198.66666666666663" y="-59.5" />
+      <point x="949.6919049477319" y="563.6769547325102" />
+      <point x="949.6919049477319" y="585.1186556927297" />
+      <point x="900.2990397805213" y="585.1186556927297" />
+      <point x="900.2990397805213" y="623.1769547325102" />
+      <point x="844.0703017832648" y="623.1769547325102" />
+      <point x="844.0703017832648" y="448.0" />
+      <point x="1053.2514367816093" y="448.0" />
+      <point x="-144.5" y="60.0" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.daynight.Sun" relationship="DEPENDENCY">
+      <point x="-198.66666666666663" y="-59.5" />
+      <point x="900.2990397805213" y="563.6769547325102" />
+      <point x="900.2990397805213" y="585.1186556927297" />
+      <point x="324.6842214180977" y="585.1186556927297" />
+      <point x="324.6842214180977" y="155.50377229080934" />
+      <point x="667.7514367816094" y="155.50377229080934" />
+      <point x="0.0" y="37.5" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.Block" relationship="DEPENDENCY">
+      <point x="-198.66666666666663" y="-59.5" />
+      <point x="898.2514367816094" y="563.6769547325102" />
+      <point x="898.2514367816094" y="49.0" />
+      <point x="1166.418103448276" y="49.0" />
+      <point x="-31.333333333333343" y="14.0" />
+    </edge>
+    <edge source="pepse.world.daynight.Sun" target="pepse.world.Block" relationship="DEPENDENCY">
+      <point x="0.0" y="-37.5" />
+      <point x="915.626436781609" y="59.0" />
+      <point x="915.626436781609" y="49.0" />
+      <point x="1166.418103448276" y="49.0" />
+      <point x="-31.333333333333343" y="14.0" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.daynight.Night" relationship="DEPENDENCY">
+      <point x="-198.66666666666663" y="-59.5" />
+      <point x="900.2990397805213" y="563.6769547325102" />
+      <point x="900.2990397805213" y="655.5699588477365" />
+      <point x="787.402949245542" y="655.5699588477365" />
+      <point x="787.402949245542" y="448.0" />
+      <point x="1726.7514367816093" y="448.0" />
+      <point x="0.0" y="26.5" />
+    </edge>
+    <edge source="PepseGameManager" target="pepse.world.Avatar" relationship="TO_ONE">
+      <point x="0.0" y="-59.5" />
+      <point x="1969.5" y="563.6769547325102" />
+      <point x="1969.5" y="438.0" />
+      <point x="1342.2514367816093" y="438.0" />
+      <point x="144.5" y="60.0" />
+    </edge>
+    <edge source="pepse.world.trees.Tree" target="pepse.world.Terrain" relationship="GENERALIZATION">
+      <point x="55.25" y="-37.5" />
+      <point x="2133.5014367816093" y="275.0" />
+      <point x="1905.3701870772436" y="275.0" />
+      <point x="0.0" y="37.5" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic" zoom="0.6529332736229287" showDependencies="true" x="1150.5" y="291.6992455418382" />
+  <SelectedNodes />
+  <Categories>
+    <Category>Inner Classes</Category>
+    <Category>Methods</Category>
+    <Category>Properties</Category>
+  </Categories>
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+
