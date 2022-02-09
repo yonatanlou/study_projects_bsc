@@ -1,0 +1,33 @@
+yonatan.lourie
+204767644
+
+
+=============================
+=      File description     =
+=============================
+BrightnessImgCharMatcher.java - maintaining all the calculations for converting the image for chars.
+Driver.java - The main function which runs the program (processing the args).
+CharRenderer.java - Provided through supplied materials.
+Shell - The class is used to create an application for our ascii image converter. Giving various options to handle
+the converter.
+
+=============================
+=          Design           =
+=============================
+
+To convert a given image to ascii art, the application have to do a variety of calculations and normalizations.
+The ascii_art goal is to maintain all the calculations of the convertion from image to ascii.
+The Shell is the main interface which from there the user can control the convertion.
+The method chooseChars() is called first; I chose to design it using charsSetup to generate the array and then call
+convertImageToAscii(), which does calculations and also calling for other methods.
+The usage of a hashmap for photo conversion is crucial; rather than converting each time from scratch,
+the hashmap saves the data of the pictures converted, and instead of calculating afresh,
+it just uses the calculations from the previous time.
+
+
+=============================
+=    Answers to questions   =
+=============================
+
+1. The  findDuplicate is pretty staright forward, it easy to see the run time (one for loop for all of the list).
+2.
