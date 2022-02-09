@@ -1,5 +1,14 @@
-ohadrav
-yonatanlou
+## README
+
+Simulation of the world using OOP principals.
+<p align="center">
+  <img src="https://github.com/yonatanlou/study_projects/blob/main/Introduction%20to%20OOP/pepse/Screen%20Recording%202022-02-09%20at%2023.50.02.gif?raw=true" width="350" title="gif">
+</p>
+
+
+
+
+
 
 The UML are pretty similiar due to the fact that mandatory requests were pretty straight forward.
 The main things that we didnt think aboout them are the inheritance of the Leaf class from the Block Class,
@@ -7,6 +16,9 @@ and the inheritance of the Tree class from the Terrain class.
 We didnt think before hand about the connection of the SunHalo and the Sum and thought it will make sense
 to do it with composition or delegation. But we actually use Functional interface.
 
+<p align="center">
+  <img src="https://github.com/yonatanlou/study_projects/blob/main/Introduction%20to%20OOP/pepse/uml_after.png?raw=true" width="550" title="uml">
+</p>
 
 To implement the infinite world we use composition inside PepseGameManager. and override the update method of the class.
 Those, we were manage to control the simulation objects from the manager (remove and create) and also to know
@@ -49,9 +61,9 @@ PepseGameManager.java
         correlated with the sun.
 
 
-=============================
+
 =          Design           =
-=============================
+
 
 PepseGameManager - The PepseGameManager is managing the whole simulation, when we using composition with each one of the objects.
 
@@ -75,9 +87,9 @@ Avatar - becasue the avatar is practically a GameObject, it was pretty easy to c
 The design of the Sky is pretty straightforward (just simple composition in pepseGameManager)
 
 
-=============================
+
 =  Implementation details   =
-=============================
+
 
 
 The SunHalo is connecting to the Sun with Functional Interface which override the update method and each
@@ -98,9 +110,9 @@ The sun movement is implemented by the Transition class with LINEAR_INTERPOLATOR
 (so that the sun is doing infinite circles).
 
 
-=============================
+
 =          Bonuses          =
-=============================
+
 1. The sky is getting red when the energy of the avatar is less than 10.
 2. You can make the avatar running faster with the arrows+Z (depending on your energy).
 
