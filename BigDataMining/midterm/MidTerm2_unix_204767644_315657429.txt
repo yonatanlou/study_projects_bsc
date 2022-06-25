@@ -1,0 +1,132 @@
+## MidTerm 52002 2022
+
+# Student IDs: 
+ID1: 204767644
+ID2: 315657429
+
+
+## You must show a "Proof of Work" for each question, even if there is no explicit output. 
+## For example, a proof of work can be a printout/output that demonstrates that your command achieved the requirements. 
+
+""" Question 1 Shell Command ($): """
+
+       head -n 10 stackoverflow_numpy_qa.tsv		wc stackoverflow_numpy_qa.tsv
+
+""" Question 1 Shell Output ($): """
+
+	id	title	tags	answer_count	qustion_score	answer_score	question_creation_date	answer_creation_date	questions_body	answer_body
+0	41609473	How to normalize a 2-dimensional numpy array in python less verbose?	python|arrays|syntax|numpy|normalization	12	103	0	2012-01-18 03:12:41.033 UTC	2017-01-12 09:31:39.113 UTC	<p>Given a 3 times 3 numpy array</p><pre><code>a = numpy.arange(0,27,3).reshape(3,3)# array([[ 0,  3,  6],#        [ 9, 12, 15],#        [18, 21, 24]])</code></pre><p>To normalize the rows of the 2-dimensional array I thought of</p><pre><code>row_sums = a.sum(axis=1) # array([ 9, 36, 63])new_matrix = numpy.zeros((3,3))for i, (row, row_sum) in enumerate(zip(a, row_sums)):    new_matrix[i,:] = row / row_sum</code></pre><p>There must be a better way, isn't there?</p><p>Perhaps to clearify: By normalizing I mean, the sum of the entrys per row must be one. But I think that will be clear to most people.</p>	<p>Or using lambda function, like</p><pre><code>&gt;&gt;&gt; vec = np.arange(0,27,3).reshape(3,3)&gt;&gt;&gt; import numpy as np&gt;&gt;&gt; norm_vec = map(lambda row: row/np.linalg.norm(row), vec)</code></pre><p>each vector of vec will have a unit norm.</p>
+1	41547771	NumPy array is not JSON serializable	python|json|django|numpy	14	363	1	2014-10-30 06:23:48.117 UTC	2017-01-09 12:08:19.603 UTC	<p>After creating a NumPy array, and saving it as a Django context variable, I receive the following error when loading the webpage:</p><pre><code>array([   0,  239,  479,  717,  952, 1192, 1432, 1667], dtype=int64) is not JSON serializable</code></pre><p>What does this mean?</p>	<p>Here is an implementation that work for me and removed all nans (assuming these are simple object (list or dict)):</p><pre><code>from numpy import isnandef remove_nans(my_obj, val=None):    if isinstance(my_obj, list):        for i, item in enumerate(my_obj):            if isinstance(item, list) or isinstance(item, dict):                my_obj[i] = remove_nans(my_obj[i], val=val)            else:                try:                    if isnan(item):                        my_obj[i] = val                except Exception:                    pass    elif isinstance(my_obj, dict):        for key, item in my_obj.iteritems():            if isinstance(item, list) or isinstance(item, dict):                my_obj[key] = remove_nans(my_obj[key], val=val)            else:                try:                    if isnan(item):                        my_obj[key] = val                except Exception:                    pass    return my_obj</code></pre>
+2	42019130	How can I upgrade NumPy?	python|opencv|numpy|homebrew|anaconda	12	74	3	2015-02-14 17:00:00.74 UTC	2017-02-03 07:41:05.063 UTC	"<p>When I installed OpenCV using <a href=""https://en.wikipedia.org/wiki/Homebrew_%28package_management_software%29"" rel=""noreferrer"">Homebrew</a> (<code>brew</code>), I got this problem whenever I run this command to test <code>python -c ""import cv2""</code>:</p><pre><code>RuntimeError: module compiled against API version 9 but this version of numpy is 6Traceback (most recent call last):  File ""&lt;string&gt;"", line 1, in &lt;module&gt;ImportError: numpy.core.multiarray failed to import</code></pre><p>I tried to upgrade NumPy, but this is confusing:</p><pre><code>&gt;&gt;&gt; import numpy&gt;&gt;&gt; print numpy.__version__1.6.1</code></pre><p>When I run brew to upgrade NumPy, I got this problem:</p><pre><code>brew install -u numpyWarning: numpy-1.9.1 already installed</code></pre><p>When I uninstalled it:</p><pre><code>sudo pip install numpyRequirement already satisfied (use --upgrade to upgrade): numpy in ./anaconda/lib/python2.7/site-packages</code></pre><p>I have followed <a href=""https://stackoverflow.com/questions/22585235/python-anaconda-how-to-safely-uninstall"">this question</a> and deleted <a href=""https://en.wikipedia.org/wiki/Anaconda_(Python_distribution)"" rel=""noreferrer"">Anaconda</a> from my mac.</p><pre><code>pip install numpyRequirement already satisfied (use --upgrade to upgrade): numpy in /Library/Python/2.7/site-packages</code></pre><p>But nothing have changed. How can I link the NumPy version to OpenCV?</p>"	<p>Because you have multiple versions of NumPy installed.</p><p>Try <code>pip uninstall numpy</code> and <code>pip list | grep numpy</code> several times, until you see no output from <code>pip list | grep numpy</code>.</p><p>Then <code>pip install numpy</code> will get you the newest version of NumPy.</p>
+3	41861106	Python Pandas - Missing required dependencies ['numpy'] 1	python|pandas|numpy|anaconda|spyder	29	61	4	2017-01-25 19:23:11.523 UTC	2017-01-25 20:30:07 UTC	"<p>Since yesterday I've had this error when I try to import packages on anaconda :</p><p><code>ImportError: Missing required dependencies ['numpy']</code></p><p>I have tried un-installing Anaconda and Python, switching to Python 2.7 but nothing works it's still the same error, here is the code I get :</p><p><a href=""https://i.stack.imgur.com/lnUjz.jpg"" rel=""noreferrer""><img src=""https://i.stack.imgur.com/lnUjz.jpg"" alt=""enter image description here""></a></p><p>Any help is really appreciated thanks !</p>"	"<p>Did you install miniconda and pandas without dependencies? </p><p>Try installing numpy first with <code>conda install numpy</code> or <code>pip install numpy</code>. </p><p>If you're on Windows you can get pre-compiled versions of most libraries that require compilation from <a href=""http://www.lfd.uci.edu/~gohlke/pythonlibs/"" rel=""nofollow noreferrer"">here</a>.</p>"
+4	42049655	Is there a NumPy function to return the first index of something in an array?	python|arrays|numpy	17	573	5	2009-01-11 01:21:39.64 UTC	2017-02-05 07:41:00.187 UTC	<p>I know there is a method for a Python list to return the first index of something:</p><pre><code>&gt;&gt;&gt; l = [1, 2, 3]&gt;&gt;&gt; l.index(2)1</code></pre><p>Is there something like that for NumPy arrays?</p>	<p>For 1D arrays, I'd recommend <code>np.flatnonzero(array == value)[0]</code>, which is equivalent to both <code>np.nonzero(array == value)[0][0]</code> and <code>np.where(array == value)[0][0]</code> but avoids the ugliness of unboxing a 1-element tuple.</p>
+5	41950439	Find nearest value in numpy array	python|search|numpy	19	425	6	2010-04-02 11:38:23.173 UTC	2017-01-31 05:43:29.32 UTC	<p>Is there a numpy-thonic way, e.g. function, to find the <em>nearest value</em> in an array? </p><p>Example:</p><pre><code>np.find_nearest( array, value )</code></pre>	<p>I think the most pythonic way would be:</p><pre><code> num = 65 # Input number array = np.random.random((10))*100 # Given array  nearest_idx = np.where(abs(array-num)==abs(array-num).min())[0] # If you want the index of the element of array (array) nearest to the the given number (num) nearest_val = array[abs(array-num)==abs(array-num).min()] # If you directly want the element of array (array) nearest to the given number (num)</code></pre><p>This is the basic code. You can use it as a function if you want</p>
+6	41734989	How can I upgrade NumPy?	python|opencv|numpy|homebrew|anaconda	12	74	7	2015-02-14 17:00:00.74 UTC	2017-01-19 06:15:15.157 UTC	"<p>When I installed OpenCV using <a href=""https://en.wikipedia.org/wiki/Homebrew_%28package_management_software%29"" rel=""noreferrer"">Homebrew</a> (<code>brew</code>), I got this problem whenever I run this command to test <code>python -c ""import cv2""</code>:</p><pre><code>RuntimeError: module compiled against API version 9 but this version of numpy is 6Traceback (most recent call last):  File ""&lt;string&gt;"", line 1, in &lt;module&gt;ImportError: numpy.core.multiarray failed to import</code></pre><p>I tried to upgrade NumPy, but this is confusing:</p><pre><code>&gt;&gt;&gt; import numpy&gt;&gt;&gt; print numpy.__version__1.6.1</code></pre><p>When I run brew to upgrade NumPy, I got this problem:</p><pre><code>brew install -u numpyWarning: numpy-1.9.1 already installed</code></pre><p>When I uninstalled it:</p><pre><code>sudo pip install numpyRequirement already satisfied (use --upgrade to upgrade): numpy in ./anaconda/lib/python2.7/site-packages</code></pre><p>I have followed <a href=""https://stackoverflow.com/questions/22585235/python-anaconda-how-to-safely-uninstall"">this question</a> and deleted <a href=""https://en.wikipedia.org/wiki/Anaconda_(Python_distribution)"" rel=""noreferrer"">Anaconda</a> from my mac.</p><pre><code>pip install numpyRequirement already satisfied (use --upgrade to upgrade): numpy in /Library/Python/2.7/site-packages</code></pre><p>But nothing have changed. How can I link the NumPy version to OpenCV?</p>"	"<p>FYI, when you using or importing TensorFlow, a similar error may occur, like (caused by NumPy):</p><pre><code>RuntimeError: module compiled against API version 0xa but this version of numpy is 0x9Traceback (most recent call last):  File ""&lt;stdin&gt;"", line 1, in &lt;module&gt;  File ""/usr/local/lib/python2.7/dist-packages/tensorflow/__init__.py"", line 23, in &lt;module&gt;    from tensorflow.python import *  File ""/usr/local/lib/python2.7/dist-packages/tensorflow/python/__init__.py"", line 60, in &lt;module&gt;    raise ImportError(msg)ImportError: Traceback (most recent call last):  File ""/usr/local/lib/python2.7/dist-packages/tensorflow/python/__init__.py"", line 49, in &lt;module&gt;    from tensorflow.python import pywrap_tensorflow  File ""/usr/local/lib/python2.7/dist-packages/tensorflow/python/pywrap_tensorflow.py"", line 28, in &lt;module&gt;    _pywrap_tensorflow = swig_import_helper()  File ""/usr/local/lib/python2.7/dist-packages/tensorflow/python/pywrap_tensorflow.py"", line 24, in swig_import_helper    _mod = imp.load_module('_pywrap_tensorflow', fp, pathname, description)ImportError: numpy.core.multiarray failed to importError importing tensorflow.  Unless you are using bazel,you should not try to import tensorflow from its source directory;please exit the tensorflow source tree, and relaunch your python interpreterfrom there.</code></pre><p>I followed Elmira's and Drew's solution, <code>sudo easy_install numpy</code>, and it <em>worked</em>!</p><pre><code>sudo easy_install numpySearching for numpyBest match: numpy 1.11.3Removing numpy 1.8.2 from easy-install.pth fileAdding numpy 1.11.3 to easy-install.pth fileUsing /usr/local/lib/python2.7/dist-packagesProcessing dependencies for numpyFinished processing dependencies for numpy</code></pre><p>After that I could use TensorFlow without error.</p>"
+7	41874062	How can I remove Nan from list Python/NumPy	python|numpy	14	133	21	2014-01-09 04:46:59.907 UTC	2017-01-26 13:03:00.483 UTC	<p>I have a list that countain values, one of the values I got is 'nan'</p><pre><code>countries= [nan, 'USA', 'UK', 'France']</code></pre><p>I tried to remove it, but I everytime get an error </p><pre><code>cleanedList = [x for x in countries if (math.isnan(x) == True)]TypeError: a float is required</code></pre><p>When I tried this one : </p><pre><code>cleanedList = cities[np.logical_not(np.isnan(countries))]cleanedList = cities[~np.isnan(countries)]TypeError: ufunc 'isnan' not supported for the input types, and the inputs could not be safely coerced to any supported types according to the casting rule ''safe''</code></pre>	"<p>The problem comes from the fact that <code>np.isnan()</code> does not handle string values correctly. For example, if you do:</p><pre><code>np.isnan(""A"")TypeError: ufunc 'isnan' not supported for the input types, and the inputs could not be safely coerced to any supported types according to the casting rule ''safe''</code></pre><p>However the pandas version <code>pd.isnull()</code> works for numeric and string values:</p><pre><code>pd.isnull(""A"")&gt; Falsepd.isnull(3)&gt; Falsepd.isnull(np.nan)&gt; Truepd.isnull(None)&gt; True</code></pre>"
+8	41748860	Using moviepy, scipy and numpy in amazon lambda	python|amazon-web-services|numpy|aws-lambda	11	69	6	2016-01-12 17:12:06.523 UTC	2017-01-19 18:13:39.647 UTC	"<p>I'd like to generate video using <code>AWS Lambda</code> feature.</p><p>I've followed instructions found <a href=""http://docs.aws.amazon.com/lambda/latest/dg/with-s3-example-deployment-pkg.html#with-s3-example-deployment-pkg-python"">here</a> and <a href=""http://www.perrygeo.com/running-python-with-compiled-code-on-aws-lambda.html"">here</a>.</p><p>And I now have the following process to build my <code>Lambda</code> function:</p><h2>Step 1</h2><p>Fire a <code>Amazon Linux EC2</code> instance and run this as root on it:</p><pre class=""lang-sh prettyprint-override""><code>#! /usr/bin/env bash# Install the SciPy stack on Amazon Linux and prepare it for AWS Lambdayum -y updateyum -y groupinstall ""Development Tools""yum -y install blas --enablerepo=epelyum -y install lapack --enablerepo=epelyum -y install atlas-sse3-devel --enablerepo=epelyum -y install Cython --enablerepo=epelyum -y install python27yum -y install python27-numpy.x86_64yum -y install python27-numpy-f2py.x86_64yum -y install python27-scipy.x86_64/usr/local/bin/pip install --upgrade pipmkdir -p /home/ec2-user/stack/usr/local/bin/pip install moviepy -t /home/ec2-user/stackcp -R /usr/lib64/python2.7/dist-packages/numpy /home/ec2-user/stack/numpycp -R /usr/lib64/python2.7/dist-packages/scipy /home/ec2-user/stack/scipytar -czvf stack.tgz /home/ec2-user/stack/*</code></pre><h2>Step 2</h2><p>I scp the resulting tarball to my laptop. And then run this script to build a zip archive.</p><pre class=""lang-sh prettyprint-override""><code>#! /usr/bin/env bashmkdir tmprm lambda.ziptar -xzf stack.tgz -C tmpzip -9 lambda.zip process_movie.pyzip -r9 lambda.zip *.ttfcd tmp/home/ec2-user/stack/zip -r9 ../../../../lambda.zip *</code></pre><p><code>process_movie.py</code> script is at the moment only a test to see if the stack is ok:</p><pre class=""lang-py prettyprint-override""><code>def make_movie(event, context):    import os    print(os.listdir('.'))    print(os.listdir('numpy'))    try:        import scipy    except ImportError:        print('can not import scipy')    try:        import numpy    except ImportError:        print('can not import numpy')    try:        import moviepy    except ImportError:        print('can not import moviepy')</code></pre><h2>Step 3</h2><p>Then I upload the resulting archive to S3 to be the source of my <code>lambda</code> function.When I test the function I get the following <code>callstack</code>:</p><pre><code>START RequestId: 36c62b93-b94f-11e5-9da7-83f24fc4b7ca Version: $LATEST['tqdm', 'imageio-1.4.egg-info', 'decorator.pyc', 'process_movie.py', 'decorator-4.0.6.dist-info', 'imageio', 'moviepy', 'tqdm-3.4.0.dist-info', 'scipy', 'numpy', 'OpenSans-Regular.ttf', 'decorator.py', 'moviepy-0.2.2.11.egg-info']['add_newdocs.pyo', 'numarray', '__init__.py', '__config__.pyc', '_import_tools.py', 'setup.pyo', '_import_tools.pyc', 'doc', 'setupscons.py', '__init__.pyc', 'setup.py', 'version.py', 'add_newdocs.py', 'random', 'dual.pyo', 'version.pyo', 'ctypeslib.pyc', 'version.pyc', 'testing', 'dual.pyc', 'polynomial', '__config__.pyo', 'f2py', 'core', 'linalg', 'distutils', 'matlib.pyo', 'tests', 'matlib.pyc', 'setupscons.pyc', 'setup.pyc', 'ctypeslib.py', 'numpy', '__config__.py', 'matrixlib', 'dual.py', 'lib', 'ma', '_import_tools.pyo', 'ctypeslib.pyo', 'add_newdocs.pyc', 'fft', 'matlib.py', 'setupscons.pyo', '__init__.pyo', 'oldnumeric', 'compat']can not import scipy'module' object has no attribute 'core': AttributeErrorTraceback (most recent call last):  File ""/var/task/process_movie.py"", line 91, in make_movie    import numpy  File ""/var/task/numpy/__init__.py"", line 122, in &lt;module&gt;    from numpy.__config__ import show as show_config  File ""/var/task/numpy/numpy/__init__.py"", line 137, in &lt;module&gt;    import add_newdocs  File ""/var/task/numpy/numpy/add_newdocs.py"", line 9, in &lt;module&gt;    from numpy.lib import add_newdoc  File ""/var/task/numpy/lib/__init__.py"", line 13, in &lt;module&gt;    from polynomial import *  File ""/var/task/numpy/lib/polynomial.py"", line 11, in &lt;module&gt;    import numpy.core.numeric as NXAttributeError: 'module' object has no attribute 'core'END RequestId: 36c62b93-b94f-11e5-9da7-83f24fc4b7caREPORT RequestId: 36c62b93-b94f-11e5-9da7-83f24fc4b7ca  Duration: 112.49 ms Billed Duration: 200 ms     Memory Size: 1536 MB    Max Memory Used: 14 MB</code></pre><p>I cant understand why python does not found the core directory that is present in the folder structure.</p><p>EDIT:</p><p>Following @jarmod advice I've reduced the <code>lambda</code>function to:</p><pre class=""lang-py prettyprint-override""><code>def make_movie(event, context):    print('running make movie')    import numpy</code></pre><p>I now have the following error:</p><pre><code>START RequestId: 6abd7ef6-b9de-11e5-8aee-918ac0a06113 Version: $LATESTrunning make movieError importing numpy: you should not try to import numpy from        its source directory; please exit the numpy source tree, and relaunch        your python intepreter from there.: ImportErrorTraceback (most recent call last):  File ""/var/task/process_movie.py"", line 3, in make_movie    import numpy  File ""/var/task/numpy/__init__.py"", line 127, in &lt;module&gt;    raise ImportError(msg)ImportError: Error importing numpy: you should not try to import numpy from        its source directory; please exit the numpy source tree, and relaunch        your python intepreter from there.END RequestId: 6abd7ef6-b9de-11e5-8aee-918ac0a06113REPORT RequestId: 6abd7ef6-b9de-11e5-8aee-918ac0a06113  Duration: 105.95 ms Billed Duration: 200 ms     Memory Size: 1536 MB    Max Memory Used: 14 MB</code></pre>"	"<p>Another, very simple method that's possible these days is to build using the awesome docker containers that LambCI made to mimic Lambda: <a href=""https://github.com/lambci/docker-lambda"" rel=""noreferrer"">https://github.com/lambci/docker-lambda</a></p><p>The <code>lambci/lambda:build</code> container resembles AWS Lambda with the addition of a mostly-complete build environment. To start a shell session in it:</p><pre><code>docker run -v ""$PWD"":/var/task -it lambci/lambda:build bash</code></pre><p>Inside the session:</p><pre><code>export share=/var/taskeasy_install pippip install -t $share numpy</code></pre><p>Or, with virtualenv:</p><pre><code>export share=/var/taskexport PS1=""[\u@\h:\w]\$ "" # required by virtualenveasy_install pippip install virtualenv# ... make the venv, install numpy, and copy it to $share</code></pre><p>Later on you can use the main lambci/lambda container to test your build.</p>"
+
+66659 17727086 148972675 stackoverflow_numpy_qa.tsv
+
+""" Question 2 Shell Command ($): """
+
+       grep -c 'pandas' stackoverflow_numpy_qa.tsv
+	
+       cat stackoverflow_numpy_qa.tsv | grep 'pandas\|scipy' | cut -d ',' -f2 | uniq | wc -l
+
+
+""" Question 2 Shell Output ($): """
+
+       7420
+       20229
+
+""" Question 3 Shell Command ($): """
+We saved the file as tab delimited before running the command.
+The second command used to create the output. We didn’t attach the full row payload of the first 5 as it is huge. We instead output the original row number (header is row number 1), question length and answer length.
+
+ awk -F "\t" 'BEGIN {OFS="\t"}; {print $0,(NR==1 ? "q_length" OFS "a_length" : length($9)    OFS length($10))}' stackoverflow_numpy_qa.tsv | sort -t$'\t' -k11 -nr | head -n 5
+
+echo "Original Row Number"    "Question Length"    "Answer Length"; awk -F "\t" 'BEGIN {OFS="\t"}; {print (NR==1 ? "NR" OFS "q_length" OFS "a_length" : NR OFS length($9) OFS length($10))}' stackoverflow_numpy_qa.tsv | sort -t$'\t' -k2 -nr | head -n 5
+
+""" Question 3 Shell Output ($): """
+
+Original Row Number Question Length Answer Length
+9999	27	356
+9998	27	561
+9996	27	593
+9995	27	606
+9994	27	785
+
+
+""" Question 4 Shell Command ($): """
+
+       sort -t, -k5,5nr -k6,6nr stackoverflow_numpy_qa.tsv
+
+""" Question 4 Shell Output ($): """
+
+       too big
+
+""" Question 5 Shell Command ($): """
+
+awk -F "\t" 'BEGIN {OFS="\t"}; {gsub(/[-:T]/, " ", $7);gsub(/[-:T]/, " ",   $8);d1=mktime($7);d2=mktime($8);print $0, (NR==1 ? "Time Diff" : (d2-d1)/86400)}' stackoverflow_numpy_qa.tsv>with_time.tsv
+
+
+
+""" Question 5 Shell Output ($): """
+
+
+       No output as we saved as file.
+
+
+""" Question 6 Shell Command ($): """
+
+ for ((i=30;i<=4590;i=i+30));do outputfile=stackoverflow_by_reaction_time__"$i".tsv;awk -F"\t" -v i="$i" '{if($11 < i && $11 > i-30) print}' with_time.tsv > $outputfile ; done
+
+
+""" Question 6 Shell Output ($): """
+We decided to name the files based on the upper bound. E.g suffix 90 means that the file contains observations with reaction time between 60 and 90 days.
+
+ls | head -5
+
+stackoverflow_by_reaction_time_1080
+stackoverflow_by_reaction_time_1110
+stackoverflow_by_reaction_time_1140
+stackoverflow_by_reaction_time_1170
+stackoverflow_by_reaction_time_1200
+stackoverflow_by_reaction_time_1230
+stackoverflow_by_reaction_time_780
+
+
+""" Question 7 Shell Command ($): """
+
+for file in `find stackoverflow_by_reaction_time_* -type f -size +1` ; do  awk -F"\t" -v file=$file 'BEGIN{FS=OFS="\t"; split(file, a, "__")}{sum1+=$5; sum2+=$6} END{print (sum2/NR) OFS (sum1/NR) OFS substr(a[2],1, length(a[2])-4)}' $file; done | sort -t$'\t' -k3 -nr
+
+
+
+""" Question 7 Shell Output ($): """
+question_score_avg answear_score_avg reaction_time
+16.0684 10.3059 30
+38.1892 11.4324 60
+47.0417 17.4167 90
+33.6667 2.11111 120
+69.3684 39.5789 150
+148.875 28.125  180
+106.25  13.8125 210
+64      5.66667 240
+69.8462 4.92308 270
+66.6154 35.5385 300
+104     32.4    330
+95.875  53.125  360
+79.8333 12.1111 390
+82.5385 28.3077 420
+155.059 31.2941 450
+66      11.6    480
+147.208 10.4167 510
+…….
+
+
+
+""" Question 7 Answer: """
+
+We can see that when the reaction time is higher, the avg question score is getting higher, but the average answer score is getting lower.  This could be because questions are unique in the thread. And the first thing that you see when you enter a question thread, and answers can be updated and added for years.
+
+

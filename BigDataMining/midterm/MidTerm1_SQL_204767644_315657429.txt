@@ -1,0 +1,196 @@
+## MidTerm 52002 2022
+
+# Student IDs: 
+ID1: 204767644
+ID2: 315657429
+
+""" Query 1: """
+
+SELECT id,tags,title,answer_count,score, view_count
+FROM `bigquery-public-data.stackoverflow.posts_questions`
+WHERE tags = "java"
+ORDER BY score DESC
+LIMIT 5;
+
+""" Query 1 Output (Json): """
+
+{  "id": "15202997",  "tags": "java",  "title": "What is the difference between canonical name, simple name and class name in Java Class?",  "answer_count": "8",  "score": "1103",  "view_count": "285472"}
+{  "id": "1906445",  "tags": "java",  "title": "What is the difference between JDK and JRE?",  "answer_count": "20",  "score": "1018",  "view_count": "769268"}
+{  "id": "1099300",  "tags": "java",  "title": "What\u0027s the difference between getPath(), getAbsolutePath(), and getCanonicalPath() in Java?",  "answer_count": "6",  "score": "625",  "view_count": "403624"}
+{  "id": "4234985",  "tags": "java",  "title": "How to for each the hashmap?",  "answer_count": "7",  "score": "557",  "view_count": "841794"}
+{  "id": "6698354",  "tags": "java",  "title": "Where to get \"UTF-8\" string literal in Java?",  "answer_count": "11",  "score": "552",  "view_count": "346093"}
+
+""" Query 2: """
+
+SELECT COUNT(title) AS num_questions,  
+    SUM(CASE WHEN answer_count >= 1 THEN 1 ELSE 0 END) AS num_questions_with_comments, 
+    ROUND(AVG(answer_count),3) AS avg_answer_count,
+    ROUND(AVG(view_count),3) AS avg_view_count,
+    ROUND(AVG(score),3) AS avg_score,
+    
+FROM `bigquery-public-data.stackoverflow.posts_questions`
+WHERE tags = "java";
+
+""" Query 2 Output (Json): """
+
+{  "num_questions": "105936",  "num_questions_with_comments": "96807",  "avg_answer_count": "2.103",  "avg_view_count": "2552.706",  "avg_score": "0.85"}
+
+""" Query 3: """
+
+SELECT EXTRACT(HOUR FROM creation_date) as creation_hour,
+    COUNT(title) AS num_questions,  
+    SUM(CASE WHEN answer_count >= 1 THEN 1 ELSE 0 END) AS num_questions_with_comments, 
+    ROUND(AVG(answer_count),3) AS avg_answer_count,
+    ROUND(AVG(view_count),3) AS avg_view_count,
+    ROUND(AVG(score),3) AS avg_score,
+    
+FROM `bigquery-public-data.stackoverflow.posts_questions`
+WHERE tags = "java"
+GROUP BY creation_hour
+ORDER BY num_questions, avg_answer_count, avg_view_count ASC;
+
+
+""" Query 3 Output (Json): """
+
+       {  "creation_hour": "1",  "num_questions": "3141",  "num_questions_with_comments": "2881",  "avg_answer_count": "1.974",  "avg_view_count": "2544.033",  "avg_score": "0.92"}
+{  "creation_hour": "0",  "num_questions": "3157",  "num_questions_with_comments": "2905",  "avg_answer_count": "1.949",  "avg_view_count": "2504.087",  "avg_score": "0.526"}
+{  "creation_hour": "3",  "num_questions": "3360",  "num_questions_with_comments": "3092",  "avg_answer_count": "1.981",  "avg_view_count": "2328.848",  "avg_score": "0.461"}
+{  "creation_hour": "23",  "num_questions": "3372",  "num_questions_with_comments": "3122",  "avg_answer_count": "1.933",  "avg_view_count": "2160.195",  "avg_score": "0.637"}
+{  "creation_hour": "2",  "num_questions": "3407",  "num_questions_with_comments": "3138",  "avg_answer_count": "1.915",  "avg_view_count": "1646.494",  "avg_score": "0.442"}
+{  "creation_hour": "4",  "num_questions": "3598",  "num_questions_with_comments": "3332",  "avg_answer_count": "2.1",  "avg_view_count": "2777.349",  "avg_score": "0.853"}
+{  "creation_hour": "22",  "num_questions": "3735",  "num_questions_with_comments": "3459",  "avg_answer_count": "1.993",  "avg_view_count": "2172.913",  "avg_score": "0.677"}
+{  "creation_hour": "5",  "num_questions": "4004",  "num_questions_with_comments": "3640",  "avg_answer_count": "2.213",  "avg_view_count": "3181.302",  "avg_score": "0.85"}
+{  "creation_hour": "21",  "num_questions": "4119",  "num_questions_with_comments": "3769",  "avg_answer_count": "2.009",  "avg_view_count": "2601.296",  "avg_score": "0.854"}
+{  "creation_hour": "8",  "num_questions": "4315",  "num_questions_with_comments": "3910",  "avg_answer_count": "2.196",  "avg_view_count": "2360.594",  "avg_score": "0.823"}
+{  "creation_hour": "7",  "num_questions": "4496",  "num_questions_with_comments": "4073",  "avg_answer_count": "2.14",  "avg_view_count": "3070.924",  "avg_score": "1.013"}
+{  "creation_hour": "6",  "num_questions": "4528",  "num_questions_with_comments": "4142",  "avg_answer_count": "2.235",  "avg_view_count": "3107.153",  "avg_score": "1.172"}
+{  "creation_hour": "20",  "num_questions": "4657",  "num_questions_with_comments": "4280",  "avg_answer_count": "2.078",  "avg_view_count": "2601.431",  "avg_score": "0.855"}
+{  "creation_hour": "11",  "num_questions": "4896",  "num_questions_with_comments": "4447",  "avg_answer_count": "2.17",  "avg_view_count": "2675.486",  "avg_score": "0.946"}
+{  "creation_hour": "12",  "num_questions": "4952",  "num_questions_with_comments": "4527",  "avg_answer_count": "2.181",  "avg_view_count": "2814.703",  "avg_score": "0.942"}
+{  "creation_hour": "10",  "num_questions": "4959",  "num_questions_with_comments": "4517",  "avg_answer_count": "2.195",  "avg_view_count": "3068.235",  "avg_score": "1.174"}
+{  "creation_hour": "9",  "num_questions": "4996",  "num_questions_with_comments": "4542",  "avg_answer_count": "2.235",  "avg_view_count": "2532.734",  "avg_score": "0.862"}
+{  "creation_hour": "13",  "num_questions": "5037",  "num_questions_with_comments": "4603",  "avg_answer_count": "2.203",  "avg_view_count": "2735.093",  "avg_score": "1.129"}
+{  "creation_hour": "19",  "num_questions": "5039",  "num_questions_with_comments": "4605",  "avg_answer_count": "2.037",  "avg_view_count": "2498.244",  "avg_score": "0.856"}
+{  "creation_hour": "16",  "num_questions": "5107",  "num_questions_with_comments": "4676",  "avg_answer_count": "2.091",  "avg_view_count": "2226.178",  "avg_score": "0.699"}
+{  "creation_hour": "17",  "num_questions": "5116",  "num_questions_with_comments": "4656",  "avg_answer_count": "2.09",  "avg_view_count": "2419.879",  "avg_score": "0.727"}
+{  "creation_hour": "18",  "num_questions": "5233",  "num_questions_with_comments": "4784",  "avg_answer_count": "2.033",  "avg_view_count": "2310.875",  "avg_score": "0.821"}
+{  "creation_hour": "15",  "num_questions": "5340",  "num_questions_with_comments": "4824",  "avg_answer_count": "2.113",  "avg_view_count": "2228.451",  "avg_score": "0.722"}
+{  "creation_hour": "14",  "num_questions": "5372",  "num_questions_with_comments": "4883",  "avg_answer_count": "2.148",  "avg_view_count": "2430.469",  "avg_score": "1.036"}
+
+""" Query 3  Answer:  """
+
+The hour with the maximum questions is 14:00, while the hour with the minimum questions is 01:00.
+The average answer count is low at 01:00, have a peak at 06:00 and at 14:00 the average answer count is getting low again.
+The same process is with the number of questions but the peak is later (at 15:00).
+The average acore seems pretty stationary. 
+
+
+""" Query 4: """
+
+SELECT display_name, about_me, website_url, reputation
+FROM `bigquery-public-data.stackoverflow.users`
+WHERE CONTAINS_SUBSTR(location, 'New York, NY')
+AND CASE WHEN LOWER(about_me) LIKE '%python%' THEN 'python' WHEN LOWER(about_me) LIKE '%py%' THEN 'python' ELSE 'NO' END = 'python'
+ORDER BY reputation DESC
+LIMIT 20;
+
+""" Query 4 Output (Json): """
+
+{  "display_name": "Shane",  "about_me": "\u003cp\u003eQuantitative researcher focusing on statistics and machine learning methods in finance. Primarily use R, C++, Python, various databases (including OneTick and KDB), and LaTeX on a daily basis. \u003c/p\u003e\n\n\u003cul\u003e\n\u003cli\u003eTwitter: @statalgo\u003c/li\u003e\n\u003cli\u003eBlog: \u003ca href\u003d\"http://www.statalgo.com\" rel\u003d\"nofollow\"\u003ehttp://www.statalgo.com\u003c/a\u003e (largely inactive)\u003c/li\u003e\n\u003cli\u003eFormer moderator on data analysis stack exchange site: \u003ca href\u003d\"http://stats.stackexchange.com/\"\u003ehttp://stats.stackexchange.com/\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003eProposer of Quantitative Finance stack exchange site: \u003ca href\u003d\"http://area51.stackexchange.com/proposals/117/quantitative-finance?referrer\u003dEZoOPpokWeo1\"\u003ehttp://area51.stackexchange.com/proposals/117/quantitative-finance?referrer\u003dEZoOPpokWeo1\u003c/a\u003e\u003c/li\u003e\n\u003c/ul\u003e",  "website_url": "http://www.statalgo.com",  "reputation": "95016"}
+{  "display_name": "Wes McKinney",  "about_me": "\u003cp\u003eMain author of pandas and book Python for Data Analysis\u003c/p\u003e",  "website_url": "http://blog.wesmckinney.com",  "reputation": "90867"}
+{  "display_name": "Jimmy",  "about_me": "\u003cp\u003eI solve problems using mostly software and duct tape. At varying points, I\u0027ve been mainly writing Ocaml, Javascript, Python, F#, C#, PHP, and C. I\u0027m a generalist although some areas of interest include web security, cryptography, programming language design, healthcare data standards, procedural generation, and 3D engines.\u003c/p\u003e\n\u003cp\u003e\u003ca href\u003d\"https://blog.codinghorror.com/new-programming-jargon/\" rel\u003d\"nofollow noreferrer\"\u003eA Terrible Programmer according to Stack Overflow\u003c/a\u003e\u003c/p\u003e",  "website_url": "http://heyjimbo.com",  "reputation": "84849"}
+{  "display_name": "Erik",  "about_me": "\u003cp\u003eAddicted to programming since my nice parents got me a C64 in \u002783. Running a small consulting company with a friend, doing programming work for hire. Primarily working with C++, Java, Python and recently Dart, on Windows, OS X and Linux.\u003c/p\u003e\n\n\u003cp\u003e\u003ca href\u003d\"https://www.linkedin.com/in/eriksperling\" rel\u003d\"nofollow noreferrer\"\u003ehttps://www.linkedin.com/in/eriksperling\u003c/a\u003e\u003c/p\u003e",  "website_url": "https://www.linkedin.com/in/eriksperling",  "reputation": "83860"}
+{  "display_name": "tacaswell",  "about_me": "\u003cp\u003eSoft condensed matter physicist with a software bent.\u003c/p\u003e\n\u003cp\u003eLead developer of Matplotlib, core developer of h5py.\u003c/p\u003e\n\u003cp\u003eComputational Scientist at NSLS-II at BNL developing software for x-ray science.\u003c/p\u003e",  "website_url": null,  "reputation": "78392"}
+{  "display_name": "David Robinson",  "about_me": "\u003cp\u003eMy interests include statistics, data analysis, education, and programming in R and Python. I have \u003ca href\u003d\"http://varianceexplained.org/\" rel\u003d\"nofollow noreferrer\"\u003ea blog about statistics and programming\u003c/a\u003e.\u003c/p\u003e\n\n\u003ch3\u003eBooks\u003c/h3\u003e\n\n\u003cul\u003e\n\u003cli\u003e\u003ca href\u003d\"https://rads.stackoverflow.com/amzn/click/com/1491981652\" rel\u003d\"nofollow noreferrer\" rel\u003d\"nofollow noreferrer\"\u003eText Mining with R: A Tidy Approach\u003c/a\u003e: a guide to drawing insights from text using the \u003ca href\u003d\"http://github.com/dgrtwo/tidytext\" rel\u003d\"nofollow noreferrer\"\u003etidytext\u003c/a\u003e package in R. Co-authored with Julia Silge, and published by O\u0027Reilly in July 2017. Also available \u003ca href\u003d\"https://www.tidytextmining.com/\" rel\u003d\"nofollow noreferrer\"\u003efor free online\u003c/a\u003e.\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"http://varianceexplained.org/r/empirical-bayes-book/\" rel\u003d\"nofollow noreferrer\"\u003eIntroduction to Empirical Bayes: Examples from Baseball Statistics\u003c/a\u003e. An e-book demonstrating the statistical method of empirical Bayes, based on the example of estimating baseball batting averages.\u003c/li\u003e\n\u003c/ul\u003e\n\n\u003ch3\u003eSoftware\u003c/h3\u003e\n\n\u003cul\u003e\n\u003cli\u003e\u003ca href\u003d\"http://github.com/dgrtwo/broom\" rel\u003d\"nofollow noreferrer\"\u003ebroom\u003c/a\u003e: Convert messy model outputs to a tidy format, for use with tools such as \u003ca href\u003d\"http://github.com/hadley/dplyr\" rel\u003d\"nofollow noreferrer\"\u003edplyr\u003c/a\u003e and \u003ca href\u003d\"http://github.com/hadley/tidyr\" rel\u003d\"nofollow noreferrer\"\u003etidyr\u003c/a\u003e.\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"http://github.com/dgrtwo/fuzzyjoin\" rel\u003d\"nofollow noreferrer\"\u003efuzzyjoin\u003c/a\u003e: Join tables based on inexact matching of columns\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"http://github.com/dgrtwo/tidytext\" rel\u003d\"nofollow noreferrer\"\u003etidytext\u003c/a\u003e: Analyze text using tidy packages such as dplyr, ggplot2, and tidyr\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://github.com/dgrtwo/stackr\" rel\u003d\"nofollow noreferrer\"\u003estackr\u003c/a\u003e: R package for connecting to the Stack Exchange API\u003c/li\u003e\n\u003c/ul\u003e",  "website_url": "http://varianceexplained.org",  "reputation": "73832"}
+{  "display_name": "doug",  "about_me": "\u003cp\u003ei build Systems \u0026amp; Tools for Analysis, Prediction, Visualization, \u0026amp; Simulation.\u003c/p\u003e\n\u003cp\u003ei also design, code, and deploy complete distributed and (horizontally) scalable Machine Learning-based applications (e.g., anti-fraud filter, recommendation engine, monitoring/anomaly detectors), often in the service layer decoupled from the main app.\u003c/p\u003e\n\u003cp\u003e\u003cb\u003eTechniques:\u003c/b\u003e\u003c/p\u003e\n\u003cul\u003e\n\u003cli\u003e\u003cem\u003e\u003cstrong\u003eMachine Learning\u003c/strong\u003e\u003c/em\u003e\u003c/li\u003e\n\u003cli\u003edecision tree (CART/C4.5) \u0026amp; random forest\u003c/li\u003e\n\u003cli\u003edeep learning (multi-layer perceptron)\u003c/li\u003e\n\u003cli\u003esupport vector machine (SVM/SVR)\u003c/li\u003e\n\u003cli\u003ekNN/kdtree\u003c/li\u003e\n\u003cli\u003eprobabilistic graphical models (eg, Bayesian Net, Markov Random Field)\u003c/li\u003e\n\u003c/ul\u003e\n \u003chr /\u003e\n - ***Dimension Reduction Techniques***\n  - spectral decomposition (PCA \u0026 kPCA, kLDA)\n  - Kohonen Map (self-organizing map)\n\u003chr /\u003e\n - ***ETL pipelines***\n  - akka stream\n  - Apache Spark\n  - Kafka/Zookeeper\n\u003chr /\u003e\n - ***Social Network Analysis \u0026 Visualization***\n   - using graph theoretic techniques for\n     - community detection\n     - identify members essential for network health/growth\n     - identify nascent sub-communities\n     - particular fluency in *NetworkX*, *GraphViz*\n\u003chr /\u003e\n - ***Analysis \u0026 Modeling of Time Series***\n  - decomposition\n  - forecasting\n  - anomaly detection\n\u003chr /\u003e\n - ***Optimization***\n  - combinatorial optimization \n  - csp\n\u003chr /\u003e\n - ***Numerical Methods***\n  - matrix decomposition\n  - monte carlo techniques\n  - Gaussian quadrature, \n  - finite difference methods \n\u003chr /\u003e\n - ***Persistence***\n  - redis\n  - postgres\n\u003chr /\u003e\n - ***Geo-Spatial Data Modeling, Persistence, \u0026 Computation***\n  - postgis (storage, query, computation)\n\n\u003cp\u003e\u003cb\u003etoolchain:\u003c/b\u003e\u003c/p\u003e\n\u003cul\u003e\n\u003cli\u003escala\u003c/li\u003e\n\u003cli\u003eapache spark\u003c/li\u003e\n\u003cli\u003eapache kafka\u003c/li\u003e\n\u003cli\u003eakka \u0026amp; akka-stream\u003c/li\u003e\n\u003cli\u003eR\u003c/li\u003e\n\u003cli\u003epython\u003c/li\u003e\n\u003cli\u003eNumPy + SciPy + Matplotlib + pandas\u003c/li\u003e\n\u003cli\u003egit (\u0026amp; gitHub)\u003c/li\u003e\n\u003cli\u003etravis ci\u003c/li\u003e\n\u003c/ul\u003e\n\u003cp\u003eno recruiters\u003c/p\u003e",  "website_url": "http://careers.stackoverflow.com/dougybarbo",  "reputation": "66874"}
+{  "display_name": "rafaelc",  "about_me": "\u003cp\u003e~1+ million people reached \u003c/p\u003e\n\n\u003chr\u003e\n\n\u003cp\u003eUFRJ and Columbia University alum.\u003c/p\u003e\n\n\u003cp\u003eCurrently with ML Engineering at Google. Formerly with AI Quants at Morgan Stanley.\u003c/p\u003e\n\n\u003chr\u003e\n\n\u003cp\u003eTags: \u003ccode\u003epython\u003c/code\u003e, \u003ccode\u003epandas\u003c/code\u003e, \u003ccode\u003enumpy\u003c/code\u003e, \u003ccode\u003etensorflow\u003c/code\u003e\u003c/p\u003e",  "website_url": null,  "reputation": "50903"}
+{  "display_name": "chown",  "about_me": "\u003cp\u003e\u003ca href\u003d\"https://itunes.apple.com/us/artist/jonathan-hosmer/id485729875?mt\u003d8\u0026amp;uo\u003d4\" rel\u003d\"nofollow noreferrer\"\u003e\u003cstrong\u003e\u003cem\u003e\u003ccode\u003ePython for iOS\u003c/code\u003e\u003c/em\u003e\u003c/strong\u003e\u003c/a\u003e - Python Interpreter / IDE iOS App I created in my spare time.  \u003c/p\u003e\n\n\u003cp\u003e\u003ca href\u003d\"http://itunes.apple.com/us/app/python-for-ios/id485729872?ls\u003d1\u0026amp;mt\u003d8\" rel\u003d\"nofollow noreferrer\"\u003e\u003cstrong\u003e\u003cem\u003e\u003ccode\u003ePython 2.7 for iOS\u003c/code\u003e\u003c/em\u003e\u003c/strong\u003e\u003cstrong\u003e\u003ccode\u003e- on the iTunes App Store\u003c/code\u003e\u003c/strong\u003e\u003c/a\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003ca href\u003d\"https://itunes.apple.com/us/artist/jonathan-hosmer/id485729875?mt\u003d8\u0026amp;uo\u003d4\" rel\u003d\"nofollow noreferrer\" title\u003d\"Python for iOS\"\u003e\u003cimg src\u003d\"https://i.stack.imgur.com/bic5Z.png\" width\u003d\"100\" height\u003d\"30\" alt\u003d\"Python for iOS\"\u003e\u003c/a\u003e\u003c/p\u003e\n\n\u003cp\u003e\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026nbsp;\u0026lt;\u003e \u003ccode\u003echown -fLR us /base/your/*\u003c/code\u003e \u0026lt;\u003e\u003c/p\u003e\n\n\u003cp\u003e\u003ccode\u003e#SOreadytohelp\u003c/code\u003e\u003c/p\u003e",  "website_url": "https://pythonforios.com",  "reputation": "50226"}
+{  "display_name": "Boon",  "about_me": "\u003cp\u003eI manage a team that builds highly-innovative interactive apps and games for mobile and web.  I love building things that\u003c/p\u003e\n\n\u003cul\u003e\n\u003cli\u003ereach a lot of people\u003c/li\u003e\n\u003cli\u003emake people happy\u003c/li\u003e\n\u003c/ul\u003e",  "website_url": "http://www.tappollo.com",  "reputation": "38976"}
+{  "display_name": "Brian Adams",  "about_me": "\u003cp\u003e\u003cstrong\u003eTesting asynchronous code\u003c/strong\u003e\u003c/p\u003e\n\n\u003cul\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/52196951/10149510\"\u003eHow to get Timer Mocks and Promises to play nice\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/52686304/10149510\"\u003eHow to test \u003ccode\u003ePromise\u003c/code\u003e-based delay function\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/51645460/10149510\"\u003eWhy doesn\u0027t \u003ccode\u003esetImmediate\u003c/code\u003e time out when using fake timers\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/52226973/10149510\"\u003eHow to test a debounced function\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/55859310/10149510\"\u003eTest resolve and reject callbacks of a \u003ccode\u003ePromise\u003c/code\u003e\u003c/a\u003e\u003c/li\u003e\n\u003c/ul\u003e\n\n\u003cp\u003e\u003cstrong\u003eMocking dependencies\u003c/strong\u003e\u003c/p\u003e\n\n\u003cul\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/53269566/10149510\"\u003eMock a function in \u003ccode\u003eJest\u003c/code\u003e\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/55697474/10149510\"\u003eMock an API module dependency\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/55427441/10149510\"\u003eMock a \u003ccode\u003edefault\u003c/code\u003e export\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/55193363/10149510\"\u003eMock an inner function in \u003ccode\u003eJest\u003c/code\u003e\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/52118844/10149510\"\u003eMock a Node.js module in TypeScript using \u003ccode\u003eJest\u003c/code\u003e\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/55671939/10149510\"\u003eMock \u003ccode\u003edelay\u003c/code\u003e from \u003ccode\u003eRxJs\u003c/code\u003e\u003c/a\u003e\u003c/li\u003e\n\u003c/ul\u003e\n\n\u003cp\u003e\u003cstrong\u003eGeneral testing\u003c/strong\u003e\u003c/p\u003e\n\n\u003cul\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/53513444/10149510\"\u003eHow to interactively debug \u003ccode\u003eJest\u003c/code\u003e tests in VSCode\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/51604652/10149510\"\u003eTest recursive calls\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/54403992/10149510\"\u003eHow does \u003ccode\u003eJest\u003c/code\u003e allow mutation of modules\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/55622096/10149510\"\u003eTesting code using \u003ccode\u003easync / await\u003c/code\u003e with \u003ccode\u003eMocha\u003c/code\u003e\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/51696486/10149510\"\u003eUsing \u003ccode\u003eJest\u003c/code\u003e property matchers on arrays of objects\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/55232277/10149510\"\u003eSpy on bound class method of a \u003ccode\u003eReact\u003c/code\u003e component\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/55545698/10149510\"\u003e\u003ccode\u003eUnhandledPromiseRejectionWarning\u003c/code\u003e during test\u003c/a\u003e\u003c/li\u003e\n\u003cli\u003e\u003ca href\u003d\"https://stackoverflow.com/a/53016854/10149510\"\u003eDoes \u003ccode\u003eJest\u003c/code\u003e have a \u003ccode\u003e--require\u003c/code\u003e option like \u003ccode\u003eMocha\u003c/code\u003e\u003c/a\u003e\u003c/li\u003e\n\u003c/ul\u003e\n\n\u003chr\u003e\n\n\u003cul\u003e\n\u003cli\u003e\u003ccode\u003ejavascript\u003c/code\u003e silver - 1,549th\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003ejavascript\u003c/code\u003e bronze - 6,696th\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003etypescript\u003c/code\u003e bronze - 216th\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003enode.js\u003c/code\u003e bronze - 769th\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003ereactjs\u003c/code\u003e bronze - 312th\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003ejestjs\u003c/code\u003e gold - 2nd\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003ejestjs\u003c/code\u003e silver - 2nd\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003ejestjs\u003c/code\u003e bronze - 2nd\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003eunit-testing\u003c/code\u003e bronze - 196th\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003eenzyme\u003c/code\u003e bronze - 2nd\u003c/li\u003e\n\u003cli\u003e\u003ccode\u003etesting\u003c/code\u003e bronze - 39th\u003c/li\u003e\n\u003c/ul\u003e",  "website_url": null,  "reputation": "34821"}
+{  "display_name": "A. Jesse Jiryu Davis",  "about_me": "\u003cp\u003eStaff Engineer at MongoDB, specializing in Python and Tornado. Author of Motor and Toro, contributor to PyMongo, Tornado, and Python.\u003c/p\u003e",  "website_url": "http://emptysqua.re/",  "reputation": "22731"}
+{  "display_name": "Ken M. Haggerty",  "about_me": "\u003cp\u003eI\u0027m an intermediate programmer. I taught myself Objective-C for iOS so that I can better understand the work and frustrations that go into developing consumer software.\u003c/p\u003e\n\n\u003cp\u003eMy first iOS app is now on the Apple App Store! \u003cstrong\u003eAppStore.com/Threeo\u003c/strong\u003e\u003c/p\u003e\n\n\u003cp\u003eI have previously played around with: MATLAB w/ Psychtoolbox • Python w/ PyQT • HTML / CSS / JS • Scheme w/ MIT-Church\u003c/p\u003e\n\n\u003cp\u003eI am currently working on:\u003c/p\u003e\n\n\u003cp\u003e• Akay, a crowdsourced data management app for iPhone and iPod touch\u003c/p\u003e\n\n\u003cp\u003e• Updates to Threeo, including in-app purchasing and asynchronous multiplayer\u003c/p\u003e\n\n\u003cp\u003eI know that I will never become an expert programmer but I hope to learn enough to be able to hold an intelligent conversation and work with interested programmers.\u003c/p\u003e",  "website_url": "http://www.kenmhaggerty.com/",  "reputation": "22068"}
+{  "display_name": "Kzqai",  "about_me": "\u003cp\u003eI make a \u003ca href\u003d\"http://ninjawars.net\" rel\u003d\"nofollow noreferrer\"\u003eninja game\u003c/a\u003e at \u003ca href\u003d\"http://ninjawars.net\" rel\u003d\"nofollow noreferrer\"\u003eninjawars.net\u003c/a\u003e, am hirable at \u003ca href\u003d\"http://bitlucid.com\" rel\u003d\"nofollow noreferrer\"\u003ebitlucid.com\u003c/a\u003e, do art \u0026amp; origami when I can at \u003ca href\u003d\"http://dnaexmosn.deviantart.com\" rel\u003d\"nofollow noreferrer\"\u003ednaexmosn.deviantart.com\u003c/a\u003e, and code open source stuff on github at \u003ca href\u003d\"http://github.com/tchalvak\" rel\u003d\"nofollow noreferrer\"\u003egithub.com/tchalvak\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eCode in:\u003c/p\u003e\n\u003cul\u003e\n\u003cli\u003enode\u003c/li\u003e\n\u003cli\u003ereact\u003c/li\u003e\n\u003cli\u003ephp\u003c/li\u003e\n\u003cli\u003ejavascript\u003c/li\u003e\n\u003cli\u003epython (some)\u003c/li\u003e\n\u003cli\u003ehtml/css\u003c/li\u003e\n\u003c/ul\u003e\n\u003cp\u003eLearning currently:\u003c/p\u003e\n\u003cul\u003e\n\u003cli\u003eCss-grid\u003c/li\u003e\n\u003cli\u003enpm packaging\u003c/li\u003e\n\u003c/ul\u003e\n\u003cp\u003eaka Tchalvak\u003c/p\u003e",  "website_url": "http://ninjawars.net",  "reputation": "21833"}
+{  "display_name": "Tom",  "about_me": "I know and like C++, Java, and Python... although my work these days is all done in Java.\n\nI am a Computer Scientist... not a Programmer :-).\n\nI filled this out just so I could get the autobiographer badge :-P.",  "website_url": "http://stackoverflow.com/users/87979",  "reputation": "20582"}
+{  "display_name": "aaronman",  "about_me": "\u003cp\u003eGraduated in 2013 with a degree in computer science from Binghamton University. Software Engineer on Streetview at Google.  \u003c/p\u003e\n\n\u003ch2\u003eGithub\u003c/h2\u003e\n\n\u003cp\u003e\u003ca href\u003d\"https://github.com/ryanhaining/cppitertools\" rel\u003d\"nofollow\"\u003ePython itertools in C++\u003c/a\u003e\u003c/p\u003e",  "website_url": "https://github.com/aaronjosephs",  "reputation": "17666"}
+{  "display_name": "Nolen Royalty",  "about_me": "\u003cp\u003evim, python, ocaml\u003c/p\u003e",  "website_url": null,  "reputation": "17597"}
+{  "display_name": "Jonathan Clark",  "about_me": "\u003cp\u003eI am a single man working in a computer store here in New York. Trying to learn how to code in Python. Soon getting there.\u003c/p\u003e",  "website_url": null,  "reputation": "17138"}
+{  "display_name": "Garett",  "about_me": "\u003cp\u003eMost of my work is currently done in C#/VB.NET/JavaScript/C++, but I also like Java, Perl, and starting to warm to Python. What can I say, I just love technology. Linux/UNIX/Windows, I don\u0027t really have a preferred platform. I like working in them all, as long as the work is fun and challenging. \u003c/p\u003e",  "website_url": "http://www.mydistributedlife.com",  "reputation": "16214"}
+{  "display_name": "code4life",  "about_me": "\u003cpre\u003e\u003ccode\u003ecurrently involved in everything related to:\nAngular 6, RxJs 6, Electron, NodeJs Express (ugh), \nPython (flask, restplus, pandas, hurray), \nExcel-DNA, Web API, .NET Core, FinCAD.\n\nhistorically, usually found myself doing everything related \nto c#, \nincluding sharepoint, biztalk, infopath, \nvsto (excel, word), asp.net, winforms, wpf, wcf, sql, \nxml/xsd/xslt, serialization.\n\npretty much immersed in financial industry, \nhedge funds these days.\n\u003c/code\u003e\u003c/pre\u003e",  "website_url": null,  "reputation": "15249"}
+
+""" Query 5: """
+
+SELECT DATE_DIFF(CURRENT_DATE(),date(creation_date), year) AS seniority_by_year, 
+    ROUND(AVG(reputation),3) AS reputation_avg
+FROM `bigquery-public-data.stackoverflow.users`
+GROUP BY seniority_by_year
+ORDER BY reputation_avg DESC;
+
+""" Query 5 Output (Json): """
+
+{  "seniority_by_year": "14",  "reputation_avg": "9133.019"}
+{  "seniority_by_year": "13",  "reputation_avg": "3425.799"}
+{  "seniority_by_year": "12",  "reputation_avg": "1215.608"}
+{  "seniority_by_year": "11",  "reputation_avg": "719.584"}
+{  "seniority_by_year": "10",  "reputation_avg": "335.559"}
+{  "seniority_by_year": "9",  "reputation_avg": "153.999"}
+{  "seniority_by_year": "8",  "reputation_avg": "97.805"}
+{  "seniority_by_year": "7",  "reputation_avg": "72.023"}
+{  "seniority_by_year": "6",  "reputation_avg": "44.7"}
+{  "seniority_by_year": "5",  "reputation_avg": "27.239"}
+{  "seniority_by_year": "4",  "reputation_avg": "19.495"}
+{  "seniority_by_year": "3",  "reputation_avg": "12.628"}
+{  "seniority_by_year": "2",  "reputation_avg": "7.381"}
+{  "seniority_by_year": "1",  "reputation_avg": "3.287"}
+{  "seniority_by_year": "0",  "reputation_avg": "1.758"}
+
+""" Query 5  Answer:  """
+
+We can clearly see the very high correlation between the seniority by year and the reputation average. which means that as the seniority raise, yhe reputation raise as well.
+
+""" Query 6: """
+
+SELECT CASE WHEN users.profile_image_url is not null THEN 1 ELSE 0 END AS have_profile_pic,
+    round(avg(CASE WHEN posts.answer_count > 0 THEN 1 ELSE 0 END ),3) AS have_answers_precentage,
+    avg(users.reputation) as avg_reputation
+
+FROM `bigquery-public-data.stackoverflow.users` users
+INNER JOIN `bigquery-public-data.stackoverflow.posts_questions`posts
+ON (users.id = posts.owner_user_id)
+GROUP BY have_profile_pic
+
+""" Query 6 Output (Json): """
+
+{  "have_profile_pic": "1",  "have_answers_precentage": "0.83",  "avg_reputation": "2446.1805356028226"}
+{  "have_profile_pic": "0",  "have_answers_precentage": "0.903",  "avg_reputation": "6748.4738337682993"}
+
+""" Query 6  Answer:  """
+
+According to the data, it seems that contrary to common sense - it is better not to upload a profile picture
+
+
+""" Query 7: """
+
+SELECT answers.id id,
+    questions.title title,
+    questions.tags tags,
+    questions.answer_count answer_count,
+    questions.score qustion_score,
+    answers.score answer_score,
+    questions.creation_date question_creation_date,
+    answers.creation_date answer_creation_date,
+    REPLACE(questions.body, '\n', '') AS questions_body,
+    REPLACE(answers.body, '\n', '') AS answer_body
+
+FROM 
+`bigquery-public-data.stackoverflow.posts_questions` questions
+INNER JOIN `bigquery-public-data.stackoverflow.posts_answers` answers
+ON (questions.id = answers.parent_id)
+WHERE CONTAINS_SUBSTR(questions.title, 'numpy')
+
+""" Query 7 Output (Json): """
+
+      stackoverflow_numpy_qa.csv
+
+""" Query 7  Answer:  """
+
+       66,658
