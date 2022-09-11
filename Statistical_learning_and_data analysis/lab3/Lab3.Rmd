@@ -1,0 +1,743 @@
+---
+title: "Lab3"
+author: "Yonnatan Lourie, Eitan Zimmerman"
+date: "4/21/2022"
+output:
+  html_document:
+    rmarkdown::html_document:
+    theme: journal
+    toc: true
+    toc_depth: 3
+    df_print: paged
+
+    
+---
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+```{r include = FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo=FALSE )
+```
+
+```{r ECHO=FALSE,message=FALSE, warning=FALSE}
+## packages
+set.seed(42)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(ggpubr)
+library(latex2exp)
+library(glmnet)
+library(viridis)
+library(reshape2)
+
+options(dplyr.summarise.inform = FALSE)
+SIGMA <- 0.3
+```
+## 1. Simulation
+### 1.1 Implementing Kernel Regression
+#### 1.
+$X \sim uniform(-2,2)$
+
+$Y|X \sim f(x) + (\epsilon)$  $f(x) = sin(\lambda x) + 0.3x^2 + ((x-0.4)/3)^3$
+
+$$ \epsilon \sim Normal(0,\sigma^2=0.3) ;\epsilon,X\ independent$$<br>
+```{r}
+f_x <- function(x, lambda) sin(lambda*(x)) + 0.3*(x)^2 + ((x - 0.4)/3)^3
+sample_f <- function(n=1, use_x=c(), lambda, sigma2 = SIGMA) {
+  if (length(use_x)>0){
+    X <- use_x
+  }
+  else {
+    X <- runif(n = n, min = -2, max = 2) 
+  }
+  
+  epsilon <- rnorm(n = n, mean = 0, sd = sigma2)
+  
+  Y <- f_x(X, lambda)+epsilon
+  return(data.frame(X, Y))
+}
+```
+
+
+Kernel regression is a non-parametric technique for estimating a random variable's conditional expectation. The training data that is closest to $x$ will receive larger weights at each target $x$, making the y values more influential in estimating $f(x)$
+The smoothing parameter in kernel regression is the bandwidth $h$, which governs the bias-variance trade-off.
+
+#### 2-3.
+The kernel formula: $K(x) = \frac{1}{h\sqrt{2\pi}}e^-0.5(\frac{x-x_i}{h})^2$
+
+We decided to use the $h_{opt}=O(n^{-0.2})$ by Shalizi (p. 93 at Advanced Data Analysis from an Elementary Point of View) - though we dont have enough data for the asymptotic precision.
+
+
+```{r}
+
+kernel_function <- function(x, x_i, h){
+  k_x <- (1/(h*sqrt(2*pi)))*exp(-0.5*(((x-x_i)^2)/(h^2)))
+  return(k_x)
+}
+
+kernel_regression <- function(train_x, train_y, h, test_x){
+  kernel_results <- NULL
+  weights_dataframe <- data.frame(matrix(NaN, nrow=0, ncol=length(train_x)))
+  
+  for (x_i in test_x){
+    weight_ij <- kernel_function(x = train_x ,x_i =  x_i, h = h)
+    sum_weight_i <- sum(weight_ij)
+    weight_i_norm <- weight_ij/sum_weight_i
+    y_hat <- sum(weight_i_norm*train_y)
+    kernel_results <- rbind(kernel_results, c(x_i,y_hat))
+    weights_dataframe <- rbind(weights_dataframe, weight_i_norm)
+  }
+  colnames(weights_dataframe) <- paste0("x", seq(1,length(train_x)))
+  kernel_results <- data.frame(kernel_results)
+  colnames(kernel_results) <- c("X","Y")
+  results <- list("kernel_results" = data.frame(kernel_results), "weights_dataframe" = weights_dataframe)
+  return(results)
+}
+
+```
+
+
+```{r}
+n <- 60
+sim_data <- sample_f(n=n,lambda=1.5)
+x_test <- sort(runif(n = 60, min = -2, max = 2))
+k_smooth_data <- ksmooth(x = sim_data$X, y = sim_data$Y, kernel = "normal", bandwidth = 0.3)
+
+opt_h <- n^(-0.2)
+
+kernel_results <- kernel_regression(sim_data$X, sim_data$Y, h = opt_h ,test_x =sort(sim_data$X))$kernel_results
+
+
+plot(x = sim_data$X, y = sim_data$Y, main = "Kernel Regression Function vs Ksmooth", sub= "With λ=1.5, n=60 ", xlab = "X", ylab = "Y Hat")
+lines(k_smooth_data, col = "red")
+lines(kernel_results, col = "blue")
+legend("topleft", legend=c("Ksmooth", "KernelRegression"),
+       col=c("red", "blue"), lty=1:2, cex=0.8)
+
+
+```
+
+We can see that our graph is pretty similar to the Ksmooth. The main difference is that our method have less bias than the Ksmooth method (which can be controlled with the size of h).
+
+### 1.2 Regression errors for Kernel Regression
+#### 1.
+(a) Empirical error = $\frac{1}{n}\sum_{i=1}^{n} L(\hat{f(x_i)}, y_i)$
+(b) Eop = $\frac{2\sigma^2}{n}tr(w), \sigma^2 = Var(\epsilon) = 0.3, W = weights$
+
+When $w = \frac{2}{n}Cov(y_i, \hat{y_i})$ and $\sigma_{epsilon}^2$ is the variance of the error.
+(c) CV will be calculate: for each model: $\hat{MSE}(\lambda) = \frac{1}{N/K}\sum_{}(\hat{y_{i}}(\lambda) - y_{i})^2$, and then we will take the average: $\hat{MSE}(\lambda) = \frac{1}{k}*\sum_{k=1\in group\space K}(\hat{MSE_{k}}(\lambda))$
+
+(d) $EPE_{in} = \frac{1}{n}\sum E_{Y_{i}|X=x_{i}}[(Y_i - \hat{f}(x_i))^2|T]$ or in short: $\widehat{EPE_{in}}=\widehat{err}+\widehat{Eop}$
+(h) Out of sample error $EPE(f) = E(Y-f(x))^2$
+
+```{r}
+f_eop <- function(weights){
+  eop <- ((2*SIGMA/nrow(weights))*sum(diag(weights)))
+  
+  
+  
+  return(eop)
+}
+
+k_fold_cv <- function(df, k, h) {
+  datalist = list()
+  df<-df[sample(nrow(df)),]
+  folds <- cut(seq(1,nrow(df)),breaks=k,labels=FALSE)
+  
+  for(k in 1:k){
+      testIndexes <- which(folds==k,arr.ind=TRUE)
+      testData <- df[testIndexes, ]
+      trainData <- df[-testIndexes, ]
+      k_reg <- kernel_regression(trainData$X, trainData$Y, h = h ,test_x =testData$X)
+      y_hat <- k_reg$kernel_results$Y
+      error <- mean((y_hat-testData$Y)^2)
+      data <- c(k=k, error=error, h=h)
+      datalist[[k]] <- data
+  }
+  final_results <- dplyr::bind_rows(datalist)
+  return(final_results)
+} 
+```
+
+
+```{r}
+datalist = list()
+lambdas <- c(1.5, 5)
+H <- c(0.1,0.2,0.5,0.8,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10)
+N <- c(60,300)
+index=0
+for (lambda in lambdas) {
+  for (n in N) {
+    for (h in H) {
+      index = index+1
+      
+      #generate data
+      sim_data <- sample_f(n=n,lambda=lambda)
+      sim_data_out <- sample_f(n=n,lambda=lambda)
+      X_sample <- sort(runif(n = n, min = -2, max = 2))
+      
+      #making the kernel models
+      kernel_reg <- kernel_regression(sim_data$X, sim_data$Y, h = h ,test_x=sort(sim_data$X))
+      kernel_results <- kernel_reg$kernel_results
+      kernel_results_out <- kernel_regression(sim_data$X, sim_data$Y, h = h ,test_x=sort(sim_data_out$X))$kernel_results
+      kernel_epe_in <- kernel_regression(sim_data$X, sim_data$Y, h = h ,test_x=X_sample)$kernel_results
+      y <- sim_data$Y
+      y_hat <- kernel_results$Y
+    
+      #calculate the desired data
+      empirical_err <- mean((y-y_hat)^2)
+      
+      eop <- f_eop(as.matrix(kernel_reg$weights_dataframe))
+
+      y_hat_epe_in <- kernel_epe_in$Y
+      epsilon <- rnorm(n = n, mean = 0, sd = sqrt(0.3))
+      y_i <- f_x(kernel_epe_in$X, lambda) + epsilon
+      # epe_in <- mean((y_i - y_hat_epe_in)^2)
+      epe_in <- empirical_err+eop
+      
+      k_folds <- k_fold_cv(sim_data, 5, h)
+      
+      epe_out <- mean((sim_data_out$Y-kernel_results_out$Y)^2)
+      
+      data <- c(lambda=lambda, n=n, h=h, empirical_err=empirical_err, eop=eop,epe_out=epe_out, k_fold=mean(k_folds$error), epe_in=epe_in)
+      datalist[[index]] <- data
+    }
+  }
+}
+final_results <- dplyr::bind_rows(datalist)
+```
+
+
+```{r}
+final_results$n <- as.factor(final_results$n)
+df_lambda_1.5 <- final_results[final_results$lambda == 1.5, ]
+df_lambda_5 <- final_results[final_results$lambda == 5, ]
+```
+
+
+```{r}
+df_lambda_1.5_no_eop <-df_lambda_1.5%>% subset(select = -c(lambda,eop))
+df_lambda_5_no_eop <-df_lambda_5%>% subset(select = -c(lambda,eop))
+
+df_lambda_1.5_eop <-df_lambda_1.5%>% subset(select = -c(lambda)) %>% subset(select = c(eop,n,h))
+df_lambda_5_eop <-df_lambda_5%>% subset(select = -c(lambda)) %>% subset(select = c(eop,n,h))
+q_1_plotter <- function(df) {
+    plot <- df %>% 
+    gather(key = "type_of_error", value = "error_value", -c(h,n)) %>%
+      ggplot(aes(x=h, y=error_value, color=type_of_error)) +geom_line(aes(linetype=n))+
+    scale_color_viridis(discrete = TRUE, option = "D")+
+     scale_size_manual(values=c(0.25,1))
+  
+  return(plot)
+}
+
+plot_1.5 <- q_1_plotter(df_lambda_1.5_no_eop)
+plot_5 <- q_1_plotter(df_lambda_5_no_eop)
+plot <- ggarrange(plot_1.5, plot_5,
+          labels = c("λ=1.5", "λ=5"),
+          ncol = 1, nrow = 2, legend = "bottom",common.legend=TRUE, widths = c(8, 8), heights = c(8,8))
+
+annotate_figure(plot, top = text_grob("Type of errors as a function of h and n",
+               color = "black", face = "bold", size = 14))
+
+```
+
+After experimenting with a lot of different ranges of $h$ values, we were able to see a few patterns from the graphs.
+First, when approach infinity, the value of all type of errors become stable, it seems like for $\lambda=5$ the convergence is slower (which make sense because the $\lambda$ making data generating function more noisy).
+We can also see that when the $n$ is bigger, the variance of error is lower (less spikes)
+Its a bit suprising (and good) to see that there places on both of the graph when the $EPE_{out}$ is the smallest value.
+
+
+```{r}
+plot_1.5 <- q_1_plotter(df_lambda_1.5_eop)
+plot_5 <- q_1_plotter(df_lambda_5_eop)
+plot <- ggarrange(plot_1.5, plot_5,
+          labels = c("λ=1.5", "λ=5"),
+          ncol = 1, nrow = 2, legend = "bottom",common.legend=TRUE, widths = c(8, 8), heights = c(8,8))
+
+annotate_figure(plot, top = text_grob("EOP as a function of h and n",
+               color = "black", face = "bold", size = 14))
+
+```
+
+We can see that the convergence of the error here is alot faster, and that the size of n is very important to reducing the error.
+We can also see that for small h values, we have the highest error. This is may cause by overfitting.
+we can see that the line behave a bit differently with different lambdas.
+
+#### 2.
+```{r}
+quad_regression <- function(train_x, train_y, test_x){
+  kernel_results <- NULL
+  weights_dataframe <- data.frame(matrix(NaN, nrow=0, ncol=length(train_x)))
+  quad_reg <- lm(train_y ~ poly(train_x,2))
+  pred <- predict(quad_reg,newdata=list(test_x))
+  x_y_results <- data.frame(test_x, pred)
+  colnames(x_y_results) <- c("X","Y")
+  results <- list("x_y_results" = x_y_results, "model" = quad_reg)
+  return(results)
+}
+
+
+```
+
+```{r}
+
+k_fold_cv_quad <- function(df, k) {
+  datalist = list()
+  df<-df[sample(nrow(df)),]
+  folds <- cut(seq(1,nrow(df)),breaks=k,labels=FALSE)
+  
+  for(k in 1:k){
+      testIndexes <- which(folds==k,arr.ind=TRUE)
+      testData <- df[testIndexes, ]
+      trainData <- df[-testIndexes, ]
+      quad_reg <- quad_regression(trainData$X, trainData$Y ,test_x =testData$X)
+      y_hat <- quad_reg$x_y_results$Y
+      error <- mean((y_hat-testData$Y)^2)
+      data <- c(k=k, error=error, h=h)
+      datalist[[k]] <- data
+  }
+  final_results <- dplyr::bind_rows(datalist)
+  return(final_results)
+} 
+```
+
+
+```{r}
+datalist = list()
+lambdas <- c(1.5, 5)
+N <- c(60,300)
+index=0
+for (lambda in lambdas) {
+  for (n in N) {
+      index = index+1
+      #generate data
+      sim_data <- sample_f(n=n,lambda=lambda)
+      sim_data_out <- sample_f(n=n,lambda=lambda)
+      X_sample <- sort(runif(n = n, min = -2, max = 2))
+      
+       #making the kernel models
+      quad_reg <- quad_regression(sim_data$X, sim_data$Y ,test_x=sort(sim_data$X))
+      quad_reg_out <- quad_regression(sim_data$X, sim_data$Y ,test_x=sort(sim_data_out$X))
+      quad_reg_epe_in <- quad_regression(sim_data$X, sim_data$Y ,test_x=X_sample)
+      y <- sim_data$Y
+      y_hat <- quad_reg$x_y_results$Y
+      
+      
+      #calculate the desired data
+      empirical_err <- mean((y-y_hat)^2)
+      
+      eop <- (2*0.3*(2/n))
+      
+      y_hat_epe_in <- quad_reg_epe_in$x_y_results$Y
+      epsilon <- rnorm(n = n, mean = 0, sd = sqrt(0.3))
+      y_i <- f_x(quad_reg_epe_in$x_y_results$X, lambda) + epsilon
+      epe_in <- mean((y_i - y_hat_epe_in)^2)
+      
+      
+      k_folds <- k_fold_cv_quad(sim_data, 5)
+      
+      epe_out <- mean((sim_data_out$Y-quad_reg_out$x_y_results$Y)^2)
+      
+      data <- c(lambda=lambda, n=n, empirical_err=empirical_err, eop=eop,epe_out=epe_out, k_fold=mean(k_folds$error), epe_in=epe_in)
+      datalist[[index]] <- data
+    }
+  
+}
+final_results_quad <- dplyr::bind_rows(datalist)
+final_results_quad
+```
+
+Its a bit hard to do a comparison on a table, so we grouped the $h$ paramter from the Kernel regression and took the mean results for all the $h's$ so we can see a clearer picture:
+
+
+```{r}
+final_results_kernel <- final_results %>% group_by(lambda,n) %>% summarise(empirical_err=mean(empirical_err),eop=mean(eop),epe_out=mean(epe_out),k_fold=mean(k_fold), epe_in=mean(epe_in))
+final_results_kernel$type <- "kernel"
+final_results_quad$type <- "quad"
+final_results_quad$n <- as.factor(final_results_quad$n)
+reg_comparison <- rbind(final_results_kernel, final_results_quad)
+
+
+reg_comparison %>% 
+  gather(Type_of_error, Error, -c(lambda,n,type)) %>% 
+  ggplot(aes(x=Type_of_error,y=Error,group=type)) + 
+  geom_bar(stat = "identity",aes(fill = type),position="dodge")+ggtitle("Error comparison between Kernel regression and Poly regression")
+
+
+```
+
+
+We can see that except from the empirical error (training error) and the eop, all the other (some say, the more important) metrics are Kernel Regression preferable. The kernel regression is much more flexible than the poly regression.
+
+
+## 2. fMri Data
+A functional magnetic resonance imaging (FMRI) is a type of magnetic resonance imaging. The images depict brain activity associated with a given task. FMRI images demonstrate how the brain responds to changes in blood oxygen levels. Each Voxel is a neat cube of brain tissue that contains about a million brain cells.
+We want to develop models that accurately anticipate voxel responses to natural images. Out-of-sample photos should be able to predict a response using the prediction models.
+
+
+```{r}
+set.seed(42)
+load("fMRI_data_22.RData")
+```
+
+
+
+### 2.1 Prediction model
+#### 2.1.1 
+Procedure that were handle during the data processing:
+- Cleaned 32 sparse columns (which were all 0).
+```{r}
+X <- data.frame(feature_train)
+Y <- data.frame(train_resp)
+
+
+
+X_test <- data.frame(feature_test)
+
+```
+
+```{r}
+X <- X[,colSums(X != 0) > 0]
+X_test <- X_test[,colSums(X_test != 0) > 0]%>% as.matrix()
+
+
+n <- nrow(X)
+set.seed(42)
+train_rows <- sample(1:n, .70*n)
+x.train <- X[train_rows, ] %>% as.matrix()
+x.validation <- X[-train_rows, ]%>% as.matrix()
+
+y1.train <- Y[train_rows,1]%>% as.matrix()
+y1.validation <- Y[-train_rows,1]%>% as.matrix()
+
+y2.train <- Y[train_rows,2]%>% as.matrix()
+y2.validation<- Y[-train_rows,2]%>% as.matrix()
+
+y3.train <- Y[train_rows,3]%>% as.matrix()
+y3.validation <- Y[-train_rows,3]%>% as.matrix()
+```
+
+
+-Generate an approximate 90% confidence interval for the MSPE using the t distribution.
+-Use the square-root transformation to calculate an estimate for the RMSPE and a 90% confidence interval.
+-Generate predictions for the test data (250 predictions).
+
+
+We decided to use ElasticNet which is a regularized regression method that linearly combines the L1 and L2 penalties of the lasso and ridge methods.
+We tried a different $\alpha$'s when $\alpha=0$ the model is actually a ridge regression, and when $\alpha=1$ the model is actually a lasso regression.
+
+
+```{r}
+prediction_error_calc <- function(pred_dist_vec) {
+  mspe <- mean(pred_dist_vec)
+  std_error <- sqrt(var(pred_dist_vec))[1]
+  n = length(pred_dist_vec)
+  margin <- qt(0.90,df=n-1)*std_error/sqrt(n)
+  ci_mspe <- c(mspe-margin, mspe+margin)
+  return(list("mspe" = mspe, "ci_mspe_lower"=ci_mspe[1],"ci_mspe_higher"=ci_mspe[2]))
+}
+
+type_of_model <- function(alpha) {
+  alpha <-as.double(alpha)
+  if (alpha==0) {
+    return("Ridge")
+  }
+  if (alpha==1) {
+    return("Lasso")
+  }
+  else {
+    return("ElasticNet")
+  }
+}
+```
+
+
+```{r}
+
+
+model_fitting <- function(y_train, y_test, y_type){
+fits_y <- list()
+alpha_iterations = c(0:2)
+data_points = 5
+results <- matrix(NaN, length(alpha_iterations), data_points)
+
+for (i in alpha_iterations) {
+  tmp_fit_name <- paste0("alpha", i/10)
+  tmp_fit <- cv.glmnet(x.train, y_train, type.measure="mse", alpha=i/10, nfolds=10)
+  fits_y[[tmp_fit_name]] <- tmp_fit
+  prediction <-  predict(tmp_fit, s = tmp_fit$lambda.min, newx = x.validation)
+ 
+  mspe <- round(mean((y_test - prediction)^2),4)
+
+  data <- c(tmp_fit_name=tmp_fit_name,alpha=i/10, lambda_min=tmp_fit$lambda.min, mspe=mspe,mean_cv_score=mean(tmp_fit$cvm))
+  results[i+1,] <- data
+}
+  results <- data.frame(results)
+  colnames(results) <- c("tmp_fit_name","alpha", "lambda_min", "mspe", "mean_cv_score") 
+  
+  best_model <- fits_y[[results[which.min(results$mspe),]$tmp_fit_name]]
+  best_model_name <- results[which.min(results$mspe),]$tmp_fit_name
+  best_model_results <- results[which.min(results$mspe),]
+  
+  predictions <- predict(best_model, s=best_model$lambda.min, newx=x.validation)
+  
+  pred_dist_vec <- (predictions-y_test)^2
+  mspe_data <- prediction_error_calc(pred_dist_vec)
+  rmspe_data <- prediction_error_calc(sqrt(pred_dist_vec))
+
+  best_model_results$model <- type_of_model(best_model_results$alpha)
+  best_model_results$ci_mspe_lower <- mspe_data$ci_mspe_lower
+  best_model_results$ci_mspe_higher <- mspe_data$ci_mspe_higher
+  best_model_results$rmspe <- rmspe_data$mspe
+  best_model_results$ci_rmspe_lower <- rmspe_data$ci_mspe_lower
+  best_model_results$ci_rmspe_higher <- rmspe_data$ci_mspe_higher
+  best_model_results$y_type <- y_type
+  
+  final_results <- list("fits_data" = results,"best_model_results"= best_model_results, "best_model" = best_model,"mspe_data"=mspe_data, "rmspe_data"=rmspe_data )
+  return(final_results)
+}
+
+```
+
+
+
+
+
+```{r}
+#fitting the best model for each one of the voxels
+data_y1_model <- model_fitting(y1.train,y1.validation, "y1")
+data_y2_model <- model_fitting(y2.train,y2.validation, "y2")
+data_y3_model <- model_fitting(y3.train,y3.validation, "y3")
+
+all_models <- rbind(data_y1_model$best_model_results,data_y2_model$best_model_results,data_y3_model$best_model_results)
+all_models <- rapply(object = all_models, f = round, classes = "numeric", how = "replace", digits = 3)
+
+
+```
+
+#### 2.1.2
+
+
+```{r}
+d <- melt(all_models[c("y_type","lambda_min", "mspe", "rmspe", "mean_cv_score")], id.vars="y_type")
+scaleFUN <- function(x) sprintf("%.4s", x)
+  farb <- c("blue", "red")
+d$variable <- factor(d$variable, levels = c("rmspe","mspe","mean_cv_score", "lambda_min"))
+# Separate plots
+ggplot(d, aes(y_type,value), colour=y_type) + 
+  geom_bar(stat = "identity",aes(fill = y_type))+ 
+  facet_grid(~variable)+
+  scale_y_discrete(labels=scaleFUN)
+
+```
+We can see a clear pattern in the rmspe, mspe and mean_cv_score - the first model have the best result, then the 2nd and the worst is the third model.
+There is no significant relation between the chosen lambda value and the accuracy of the prediction, though the biggest lambda correlate with the biggest errors (maybe this is not the best model for this data).
+It seems that that the cross validation score is higher than the mspe which seems odd. The reasons may can stem from the way the data was splitted (we dont have that much data so each different split may cause significant changes). This cause us to try different subset of the data (by changing the Randomseed), While yhe ranking of the models by the MSPE staied the same, the cv score (and the lambda - they dependent) have changed as well.
+Our assumptuion is that the high volatity is causes by not enough data points.
+
+
+#### 2.1.3 Submit predictions
+
+```{r}
+pred_submit_y1 <- predict(data_y1_model$best_model, as.matrix(X_test), s="lambda.min")
+pred_submit_y2 <- predict(data_y2_model$best_model, as.matrix(X_test), s="lambda.min")
+pred_submit_y3 <- predict(data_y3_model$best_model, as.matrix(X_test), s="lambda.min")
+
+preds <- as.matrix(cbind(pred_submit_y1,pred_submit_y2,pred_submit_y3))
+rmspes <-c(all_models$rmspe)
+
+save(preds,file="preds.Rdata")
+save(rmspes,file="rmspes.Rdata")
+```
+
+
+Voxel number one have the best results in terms of mspe so we will use it.
+
+#### Feature covariates
+We will use the lambda.min of our best model, extract all the betas for this particular lambda.
+Then we will compute $|\beta_i*\sigma|$ - we will multiply with the std so the coefficient will be somehow independent of the scale.
+
+```{r}
+load("feature_pyramid.RData")
+load("train_stim_1_250.Rdata")
+load("train_stim_251_500.Rdata")
+load("train_stim_501_750.Rdata")
+load("train_stim_751_1000.Rdata")
+load("train_stim_1001_1250.Rdata")
+load("train_stim_1251_1500.Rdata")
+wav_pyr_real = as.matrix(wav_pyr_real)
+wav_pyr_im = as.matrix(wav_pyr_im)
+
+```
+
+
+```{r}
+TOP_FEATURES_NUM <- 6
+lambda.index <- which(data_y1_model$best_model$lambda == data_y1_model$best_model$lambda.min)
+beta.y1 <- data_y1_model$best_model$glmnet.fit$beta[, lambda.index]
+
+x_train.sd <- apply(as.matrix(x.train), 2, sd)
+important.features <- abs(beta.y1*x_train.sd)
+
+best_features <- head(order(important.features,decreasing = TRUE),TOP_FEATURES_NUM)
+worst.featurs <- tail(order(important.features,decreasing = TRUE),TOP_FEATURES_NUM)
+
+par(mfrow=c(2,3), oma=c(0,0,2,0))
+for (i in 1:TOP_FEATURES_NUM){
+image(t(matrix(wav_pyr_real[,best_features[i]], nrow = 128)[128:1,]),
+      col = grey.colors(100),main = paste0("Feature number ",best_features[i]),sub = paste0("Best feature number ",i))
+}
+mtext("Best features", line=0, side=3, outer=TRUE, cex=2)
+
+
+```
+
+We can see that the top features are from the same area. The orientation seems to vary, but the level is pretty much the same. We can conclude that this particular place on the image is important for our prediction model.
+For comparison, let have a loot on the 6 worst features:
+
+```{r}
+par(mfrow=c(2,3),oma=c(0,0,2,0))
+for (i in 1:TOP_FEATURES_NUM){
+image(t(matrix(wav_pyr_real[,worst.featurs[i]], nrow = 128)[128:1,]),
+      col = grey.colors(100),main = paste0("Feature number ",worst.featurs[i]),sub = paste0("Worst feature number ",i))
+}
+mtext("Worst features", line=0, side=3, outer=TRUE, cex=2)
+```
+
+We can see that they all share the same area as well. It make sense that those are worse because their place is not centered as the best features.
+
+
+#### The example domain
+We will look at the upcoming pictures and determine what kind of picture our Regression can best predict.
+By understanding the output of the pictures, we can see what kind of picture our prediction model prefers.
+In general, we assume that the best pictures are those with the most "Elements" and the worst pictures are those with the fewest "Elements". As an example: the same colors, backgrounds that don't change and similar elements all in one place.
+The more background there is, the harder it will be to understand (just like different difficulty levels in puzzles).
+With our Regression model, it is difficult to understand the more difficult pictures with features, since there are not enough elements for the model to predict the pictures.
+
+We will also assume that best coefficients in the last section will be in the best predicted features.
+
+
+```{r}
+pred_y1 <- predict(data_y1_model$best_model, as.matrix(x.validation), s="lambda.min")
+
+accuracy <- abs(y1.validation - pred_y1)
+res <- data.frame(accuracy)
+colnames(res) <- "error"
+res <- res %>% arrange(desc(error))
+res$pic_num <- rownames(res)
+
+worst_pics <- head(res,50)
+best_pics <- tail(res,50)
+
+best_pics <- filter(best_pics, pic_num<1250)
+worst_pics <- filter(worst_pics, pic_num<1250)
+```
+
+```{r}
+all_pics <- rbind(train_stim_1_250, train_stim_251_500, train_stim_501_750, train_stim_751_1000, train_stim_1001_1250)
+par(mfrow=c(2,3), oma=c(0,0,2,0))
+for (pic in 1:6) {
+  image(t(matrix(all_pics[worst_pics[pic,2],],nrow = 128)[128:1,]),col = grey.colors(100),main = paste0("Picture number ", worst_pics[pic,2]),sub = paste0("Error: ",worst_pics[pic,1]))
+}
+mtext("Worst prediction pictures", line=0, side=3, outer=TRUE, cex=2)
+```
+
+Its a bit hard to find the common for the worst prediction pictures, this may cause to the topics of the pictures. We assume that people react different to those kind of pictures, or maybe this particular voxel react to sort type of pictures.
+
+```{r}
+
+par(mfrow=c(2,3), oma=c(0,0,2,0))
+for (pic in 1:6) {
+  image(t(matrix(all_pics[best_pics[pic,2],],nrow = 128)[128:1,]),col = grey.colors(100),main = paste0("Picture number ", best_pics[pic,2]),sub = paste0("Error: ",best_pics[pic,1]))
+}
+mtext("Best prediction pictures", line=0, side=3, outer=TRUE, cex=2)
+```
+
+Here also, is hard to find the common in the pictures, but here er can see that in some of best predicted photos, the main area which we immiditiely focus in is the area we saw in the last section (feature 1600-1800).
+
+
+
+## 3. Covid-19 Mortality Data
+```{r}
+df <- read.csv("Israel_covid19_newdetections.csv")
+df$date <- as.Date(df$date,tryFormats = c("%d-%m-%Y", "%D-%m-%Y"))
+index <- seq.int(nrow(df))
+df$index <- index
+```
+
+#### 3.1
+
+```{r}
+results_q_3 <- data.frame(matrix(nrow=nrow(df), ncol=1))
+H <- c(1:4)
+for (h in H) {
+  tmp_kernel_y <- kernel_regression(df$index, df$new_detections_daily, h,df$index )$kernel_results$Y
+  results_q_3 <- cbind(results_q_3, tmp_kernel_y)
+}
+results_q_3 <- results_q_3[,colSums(is.na(results_q_3))<nrow(results_q_3)]
+colnames(results_q_3) <- paste0("kernel.", H)
+
+
+results_smooth <- cbind(df, results_q_3)
+
+```
+
+```{r}
+ggplot(results_smooth, aes(x = date, y = new_detections_daily)) + geom_point(color="#555555", size=0.4, alpha=0.7)+
+  ggtitle("New Covid Cases Per Day in Israel", subtitle = paste0("Between ",min(results_smooth$date), " - ", max(results_smooth$date)))+ 
+  xlab("Date") + ylab("New Cases")+
+  geom_line(data = results_smooth,aes(x = date,y = kernel.4),colour='orange',show.legend = TRUE)
+```
+
+We decided to use the kernel regression for two main reasons:
+1. We wanted to test our alogirthm on real data.
+2. The kernel regression could be a good solution because it allows flexible modelling of a time series without reference to a specific parametric class. The technique is applicable to detection of non-linear dependenices in time series and to prediction in smooth regression models with serially correlated observations.
+
+For the size of $h$ we test alot of parameters and got that $h=4$ is the best fit.
+We have some big spikes in the data (The waves) which affect deeply on the way the smooth is happening.
+
+
+#### 3.2
+
+```{r}
+diff <- diff(df$new_detections_daily, lag=1)
+derivative_daily <- c(0,diff)
+df$derivative_daily <- derivative_daily
+
+
+results_q_3.2 <- data.frame(matrix(nrow=nrow(df), ncol=1))
+H <- c(1:5)
+for (h in H) {
+  tmp_kernel_y <- kernel_regression(df$index, df$derivative_daily, h,df$index )$kernel_results$Y
+  results_q_3.2 <- cbind(results_q_3.2, tmp_kernel_y)
+}
+results_q_3.2 <- results_q_3.2[,colSums(is.na(results_q_3.2))<nrow(results_q_3.2)]
+colnames(results_q_3.2) <- paste0("kernel.lag.1_h_", H)
+
+
+results_smooth <- cbind(results_smooth, results_q_3.2, derivative_daily)
+```
+
+```{r}
+
+ggplot(results_smooth, aes(x = date, y = derivative_daily)) + geom_point(color="#555555", size=0.4, alpha=0.7)+
+  ggtitle("New Covid Cases Per Day in Israel", subtitle = paste0("Between ",min(results_smooth$date), " - ", max(results_smooth$date)))+ 
+  xlab("Date") + ylab("New Cases")+
+  # geom_line(data = results_smooth,aes(x = date,y = kernel.lag.1_h_2),colour='green')+
+  geom_line(data = results_smooth,aes(x = date,y = kernel.lag.1_h_4),colour='red')
+```
+
+Here we try the same method as in section 1, the data here is much more noisy so its harder to smooth nicely the data. Here also we got that the best h was 4.
+
+
+
+
+
+
+
+
