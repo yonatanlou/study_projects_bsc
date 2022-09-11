@@ -1,0 +1,417 @@
+---
+title: "Lab 4"
+authors: Eitan Zimmerman and Yonathan Lourie
+date: '2022-06-10'
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Lab 4
+
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+knitr::opts_chunk$set(warning=FALSE)
+```
+```{r include = FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo=FALSE )
+```
+
+
+```{r ECHO=FALSE,message=FALSE, warning=FALSE}
+## packages
+set.seed(42)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(ggpubr)
+library(latex2exp)
+library(glmnet)
+library(viridis)
+library(reshape2)
+library(caret)
+library(MASS)
+library(randomForest)
+
+```
+
+## Comparing LDA and RF
+
+we decided to use a format of a flowing report to answer the lab question,  
+so rather then follow the question order we will answer everything as we go.
+
+
+### Reading the data
+
+```{r}
+
+# Add file names 
+train_dat_file = 'fashion-mnist_train.csv'
+test_dat_file = 'fashion-mnist_test.csv'
+
+# Read data
+fashion_mnist = read.csv(train_dat_file)
+fashion_mnist_te = read.csv(test_dat_file)
+
+pull_and_coats = fashion_mnist %>% filter( label %in% c(2,4))
+pull_and_coats_test = fashion_mnist_te %>% filter( label %in% c(2,4))
+
+# Viewing function. 
+view_image = function(k, dat = pull_and_coats[,-1],col_map = grey.colors(256)){
+  im = dat[k,] 
+  image(matrix(as.numeric(im), nc = 28)[,28:1]/256, col = col_map)
+}
+
+
+train_response = factor(pull_and_coats[,1],)
+train_feat = pull_and_coats[,-1]
+
+test_response = factor(pull_and_coats_test[,1],)
+test_feat = pull_and_coats_test[,-1]
+```
+
+### Sample Image and calsses distribution
+```{r}
+knitr::kable(table(train_response)) 
+```
+
+```{r}
+view_image(1)
+```
+
+### Data Pre Processing
+
+We will be using the PCA method that we learned about in previous classes
+to reduce our features dimensions.
+As you can see in the image above, many of the pixels are intuitively redundant 
+for our classification task. That is, if we were to ask any logical person how many
+and what pixels we really need to to be able to distinguish the two classes he
+will probably answer something like "all pixels around the edges + some more 
+around the collar"
+
+We will use this intuition to reduce the features dimension using PCA to a level
+wee keep 95% of the variance in our data.
+
+
+An important note on our methodology :
+We are using the **train** data to learn our components. We than use the **train**
+rotation matrix to project the **test** data onto our **train** feature space.
+
+That is, we are learning the projection from our train data only and use it as 
+the space for all future new images we will get. 
+
+```{r}
+features_pca = prcomp(train_feat, center = TRUE,scale. = TRUE)
+scaled_test_feat <- scale(test_feat, center= features_pca$center)
+features_pca_test = scaled_test_feat %*% features_pca$rotation
+
+
+var_explained = features_pca$sdev^2 / sum(features_pca$sdev^2)
+
+
+qplot(c(1:50), var_explained[1:50]) + 
+  geom_line() + 
+  xlab("Principal Component") + 
+  ylab("Variance Explained") +
+  ggtitle("Scree Plot") +
+  ylim(0, 1)
+
+accumulated_var_explained = cumsum(var_explained)
+vline = which(accumulated_var_explained > 0.95)[1]
+hline = accumulated_var_explained[vline]
+qplot(c(1:784), accumulated_var_explained) + 
+  geom_line() + 
+  xlab("Principal Component") + 
+  ylab("Variance Explained") +
+  ggtitle("Accumulated Scree Plot") +
+  ylim(0, 1) +
+  scale_y_continuous(n.breaks = 20)+
+  scale_x_continuous(n.breaks = 50)+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))+
+  geom_vline(xintercept = vline, color='red') +
+  geom_hline(yintercept = hline, color='red') +
+  annotate("point", x=vline, y=hline, color='green') 
+```
+In the plot above we can see the accumulated variance when keep adding more and more
+components. The red cross (and green dot) point on the ~95% variance level.
+We can see that we can reduce the feature space from 784 (number of pixels)
+to 184 loosing only 5% of variance.
+(We chose 95% as our threshold as it seems like a reasonable level)
+
+### Training Our Modles
+
+We chose to comapre the following models :
+1. Random forest
+2. LDA 
+
+let take a look on the models hyper parameters that we can control on
+
+```{r}
+knitr::kable(modelLookup('rf'))
+knitr::kable(modelLookup('lda'))
+```
+
+We get that for RF we have the mtry parameter and for LDA no parameters at all.
+
+In the cells below we are doing the following actions:
+1. Creating cross validation training process for both model. 
+We are using 5 cv's as seen in class
+2. For the RF model we create a search grid for the parameter mtry,
+we will decide on it's based value based on this search
+3. Using Caret package thresholder module to decide on the best threshold for each model.
+Our "Best" definition will be the one that achieve the highest accuracy. 
+As our classes are balanced and there is no real risk in making FP/FN
+4. Creating our own confusion matrix function that receives the **probabilities**
+for each class from a given model and a threshold and outputs the relevant metrics.
+
+```{r functions}
+confusion_matrix = function(pred_prob, real, threshold=0.5, normalize=FALSE){
+  pred = ifelse(pred_prob[,1] > threshold , "P", "N")
+  real = ifelse(real == 2, "P", "N")
+  conf_mat = table(real, pred)
+  conf_mat = conf_mat[2:1, 2:1]
+  tp = conf_mat["P", "P"]
+  fp = conf_mat["N", "P"]
+  fn = conf_mat["P", "N"]
+  tn = conf_mat["N", "N"]
+  precision = tp/(tp + fp)
+  recall = tp/(tp+fn)
+  fpr = fp/(fp+tn)
+  if (normalize) {
+    conf_mat = conf_mat/length(pred)
+  }
+  
+  return(list(confusionMatrix = conf_mat, precision=precision, recall=recall, fpr=fpr))
+}
+```
+
+
+#### RF model
+```{r}
+cv_control = trainControl(method = "cv", 
+                          number=5, 
+                          classProbs = TRUE , 
+                          savePredictions=T, 
+                          search = 'random')
+p = vline
+mtry_grid = expand.grid(mtry=sqrt(p))
+set.seed(777)
+rf_model = train(features_pca$x[,1:vline],make.names(train_response),
+                method = "rf",
+                trControl = cv_control,
+                tuneGrid = mtry_grid,
+                )
+print(rf_model)
+```
+
+```{r}
+probs <- seq(.1, 0.9, by = 0.02)
+ths_rf <- thresholder(rf_model,
+                   threshold = probs,
+                   final = TRUE,
+                   statistics = "Accuracy")
+ths_rf %>%
+  mutate(prob = probs) %>%
+  filter(Accuracy == max(Accuracy)) %>%
+  pull(prob) -> rf_threshold 
+```
+For out RF model the optimal threshold (in terms of accuracy) is `r {rf_threshold}`
+
+Confusion matrix for train and test - RF model
+
+
+Train
+```{r}
+prediction_rf_train <-predict(rf_model, newdata=features_pca$x[,1:vline], type='prob')
+confusion_matrix(prediction_rf_train,train_response, rf_threshold)
+```
+Test
+```{r}
+prediction_rf_test <-predict(rf_model, newdata=features_pca_test[,1:vline], type='prob')
+confusion_matrix(prediction_rf_test,test_response, rf_threshold)
+```
+```{r}
+plot(varImp(rf_model),top=10)
+```
+
+We can our model over fit the training data we get 100% accuracy bust still 
+maintain reasonably good performance on our test set
+Looking at the feature importance plot we can see the top 10 important PC's. Unlike
+cases we've seen in class there not much information gained from this plot, but using our
+intuition discussed above we can guess what these might be.
+
+** Trying to use grid brute search (or random) to get the best mtry parameter took
+a really long time. We used the convention of sqrt(number of features) and got 100% accuracy
+when trying to change the parameter to 5 (should reduce variance) we got the same results.
+
+
+#### LDA Model
+
+```{r}
+lda_model = train(features_pca$x[,1:vline],
+                  make.names(train_response),
+                  method = "lda",
+                  trControl = cv_control)
+print(lda_model)
+```
+
+
+```{r}
+probs <- seq(.1, 0.9, by = 0.02)
+ths_lda <- thresholder(lda_model,
+                   threshold = probs,
+                   final = TRUE,
+                   statistics = "Accuracy")
+ths_lda %>%
+  mutate(prob = probs) %>%
+  filter(Accuracy == max(Accuracy)) %>%
+  pull(prob) -> lda_threshold 
+```
+For our LDA model we have optimal threshold of `r{lda_threshold}`
+
+Looking at the confusion matrix for train and test:
+
+Train
+
+```{r}
+lda_predict_train <-predict(lda_model, newdata=features_pca$x[,1:vline], type='prob')
+confusion_matrix(lda_predict_train,train_response, lda_threshold)
+```
+
+```{r}
+lda_predict_test <- predict(lda_model, newdata=features_pca_test[,1:vline], type='prob')
+confusion_matrix(lda_predict_test,test_response, lda_threshold)
+
+```
+We can see that the LDA gets realtivley similar outputs for train and test.
+
+#### Talking about the results
+
+The RF model preforms better on both the test and train sets than the LDA.
+Seems like our RF model over fit the train data with 100% accuracy but then 
+achieves lower (but still pretty high) accuracy score on the test data when he
+make more FN then FP (saying it a pullover while it is actually a coat) so he get
+also high precision. 
+The LDA model on the other hand does not over fit the train data. We can see we get
+very similar scores for the test data with even slightly higher precision.
+As we said already, making a FP or FN is equivalently the same + 
+our response vector is balanced perfectly - all we care about is accuracy.
+Taking this in consideration, even though RF model is over fit the train data it's 
+preforming better overall.
+We could try  to reduce the variance in the model using less trees in our forest.
+
+
+Let's plot the ROC curve for both model to visualize their diffrences.
+
+```{r}
+roc_auc = function(lda_predict_test, prediction_rf_test, test_response){
+  sequnce = seq(from = 0.05, to = 0.95, by = 0.01)
+  rf_tpr_fpr = matrix(nrow = length(sequnce), ncol = 2)
+  lda_tpr_fpr = matrix(nrow = length(sequnce), ncol = 2)
+  for (i in seq(1: length(sequnce))){
+    t = sequnce[i]
+    res_lda = confusion_matrix(lda_predict_test,test_response, threshold = t)
+    res_rf = confusion_matrix(prediction_rf_test,test_response, threshold = t)
+    lda_tpr_fpr[i, ] = c(res_lda$recall, res_lda$fpr)
+    rf_tpr_fpr[i, ] = c(res_rf$recall, res_rf$fpr)
+  }
+  lda_df = as.data.frame(lda_tpr_fpr)
+  colnames(lda_df) = c("TPR", "FPR")
+  lda_df$model = "LDA"
+  rf_df = as.data.frame(rf_tpr_fpr)
+  colnames(rf_df) = c("TPR", "FPR")
+  rf_df$model = "RF"
+  roc_df = rbind(lda_df, rf_df)
+  ggplot(roc_df, aes(x = FPR, y=TPR)) +
+    geom_line(aes(color=model)) +
+    scale_color_manual(values=c("darkred", "steelblue")) +
+    geom_abline(slope = 1, intercept = 0)+
+    scale_y_continuous(n.breaks = 10) +
+    scale_x_continuous(n.breaks = 10) +
+    annotate("point", x=rf_df[50, 2], y=rf_df[50, 1], color='green') +
+    annotate("point", x=lda_df[44, 2], y=lda_df[44, 1], color='green') +
+    ggtitle("ROC curve")
+}
+roc_auc(lda_predict_test, prediction_rf_test, test_response)
+```
+Here we can see that the RF model get larger AUC than the LDA as its line is 
+always above it.
+
+
+In the last section we were asked how each of the model will preform if the
+input images were inverted.
+Le'ts take a look on the same image in both forms
+
+The original image
+
+```{r}
+view_image(1)
+```
+
+Same image inverted:
+
+```{r}
+inverted = abs(pull_and_coats[, -1] - 255)
+view_image(1, inverted)
+```
+We will discuss the effect of this transformation on the model behavior on each
+one of the models seperatly.
+
+Random Forest
+
+As seen in class decision trees are invariant for monotone change in features.
+That is, the decision boundaries learned by the tree are relative to other features
+We can show a quick example here - Lets use our already trained RF model and predict
+the test set with a simple monotone transformation of log(x+1).
+```{r}
+scaled_test_feat_mon <- scale(log(test_feat+1), center= features_pca$center)
+features_pca_test_mon = scaled_test_feat %*% features_pca$rotation
+
+prediction_rf_test_monotone <-predict(rf_model, newdata=features_pca_test_mon[,1:vline], type='prob')
+confusion_matrix(prediction_rf_test_monotone,test_response, rf_threshold)
+```
+We can see the results are pretty much the same as it was for the non transformed input.
+So for our image classification our model generally its boundaries based on the realtive pixels
+(or PCA "pixels" in our case) interactions.
+Following this, inverting an image includes a non-monotone transformation on the data.
+for example, a simple inversion can be accomplished with the following function abs(x - max(x))
+(this one produced the image above), assuming x>0.
+This will cause the model decision boundaries to be non-optimal and hence will hurt it's preformance (to an unkown level).
+
+LDA
+
+Without going into too much details the discriminant function of the LDA uses the Mahalanobis distance.
+The Mahalanobis distance is thus unit less, scale-invariant, and takes into account the correlations of the data set.*
+(*From wikipedia)
+That is, LDA uses Mahalanobis distance with the covariance matrix as the weight matrix. and it is, same as the RF model
+is invariant for monotone changes, but from different reasons.
+Here as well the inversion of the image will hurt model performance for the same reasons.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
