@@ -1,0 +1,426 @@
+---
+title: "Lab2"
+author: "Yonnatan Lourie, Eitan Zimmerman"
+date: "4/21/2022"
+output:
+  html_document:
+    rmarkdown::html_document:
+    theme: journal
+    toc: true
+    toc_depth: 3
+    df_print: paged
+
+    
+---
+
+## Lab 2
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+```{r include = FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo=FALSE )
+```
+
+```{r ECHO=FALSE,message=FALSE, warning=FALSE}
+## packages
+require(stats)
+require(combinat)
+require(dplyr)
+require(dendextend)
+require(resample)
+require(ggplot2)
+require(ggfortify)
+library(tidyverse)
+library(dplyr)
+rm(list=ls())
+```
+
+### Question 1
+
+#### Functions
+
+```{r}
+sample_means = function(){
+  u = rnorm(30)
+  return(list(u1 = u[1:10], u2=u[11:20], u3=u[21:30]))
+}
+
+sample_dataset = function(u,pdim, sigma){
+  u1 = c(u$u1, rep.int(0, pdim - 10))
+  u2 = c(u$u2, rep.int(0, pdim - 10))
+  u3 = c(u$u3, rep.int(0, pdim - 10))
+  
+  u1_mat = matrix(rnorm(30*pdim, u1, sqrt(sigma)), 30, pdim)
+  u2_mat = matrix(rnorm(30*pdim, u2, sqrt(sigma)), 30, pdim)
+  u3_mat = matrix(rnorm(30*pdim, u3, sqrt(sigma)), 30, pdim)
+  total_mat = rbind(u1_mat, u2_mat, u3_mat)
+  true_labels = c(rep.int(1,30), rep.int(2,30),rep.int(3,30))
+  return(list(sample=total_mat, true_labels=true_labels))
+}
+
+clust_acc = function(fitted_labels, true_labels){
+  max_acc = sum(true_labels == fitted_labels)/length(true_labels)
+  perms = permn(c(1,2,3))
+  for(i in 2:6) {
+    cur_perm = perms[[i]]
+    a = cur_perm[1]
+    b = cur_perm[2]
+    c = cur_perm[3]
+    r1 = replace(fitted_labels, fitted_labels == 1, a)
+    r2 = replace(r1, fitted_labels == 2, b)
+    r3 = replace(r2, fitted_labels == 3, c)
+    cur_acc = sum(true_labels == r3)/length(true_labels)
+    max_acc = max(max_acc, cur_acc)
+  }
+  return(max_acc)
+}
+
+kmeans_wrapper = function(sample, true_labels) {
+  start_time = Sys.time()
+  fit = kmeans(x = sample, centers = 3)
+  end_time = Sys.time()
+  fitted_labels = fit$cluster
+  accuracy = clust_acc(fitted_labels, true_labels)
+  
+  return(list(acc=accuracy, exec_time = end_time - start_time))
+}
+
+run_sim = function(pdim, sigma, B) {
+  res = matrix(nrow = B, ncol= 2)
+  for (i in 1:B){
+    u = sample_means()
+    data = sample_dataset(u, pdim, sigma)
+    output = kmeans_wrapper(data$sample, data$true_labels)
+    res[i,1] = output$acc
+    res[i,2] = output$exec_time
+  }
+  
+  return(list(avg_acc = mean(res[,1]), avg_time = mean(res[,2]), sd = sd(res[,1])))
+}
+
+```
+
+```{r, warning=FALSE, message = FALSE}
+B = 80
+
+res_mat = data.frame(matrix(nrow = 3, ncol=12), 
+                     row.names = c('Accuracy (Avg)', 'SE (Avg)', 'Time (Milliseconds Avg)'))
+pdims = c(10, 20, 50)
+sigmas = c(0.1, 1, 10, 100)
+names_vec = c()
+for(i in pdims) {
+     for (j in sigmas) {
+         names_vec = c(names_vec, paste("P dim", i, "Sigma", j))
+    }
+}
+
+colnames(res_mat) = names_vec
+
+for (pdim in pdims){
+  for (sigma in sigmas) {
+    output = run_sim(pdim, sigma, B)
+    colname = paste("P dim", pdim, "Sigma", sigma)
+    res_mat[colname] = c(output$avg_acc, output$sd/sqrt(B), output$avg_time*1000)
+  }
+}
+knitr::kable(t(res_mat)[,c(1,2)])
+```
+
+As expected, there are 2 main trends discovered in our simulation. 1. Increasing sigma (e.g variance), making our data to be more spread out, which makes the clusters less distinguishable.We can see this when looking at the accuracy and SE scores for P=10. Both metrics decreases when increasing sigma's value. 2. Increasing the dimensions only by padding the vector with 0 making the different observation more similar as the dimensions grows. For p=50 the vectors are variate only in quarter of their individual entries, the mean of each centroids is highly effected by the 0 and hence the clustering task is much harder. We can see how the trend described in 1 (change of sigma) has little to no effect in the case of p=50.
+
+```{r}
+
+plot_q1 <- data.frame(t(res_mat))
+plot_q1$idx <- rownames(plot_q1)
+plot_q1$SE..Avg. <- plot_q1$SE..Avg.*100
+ plot_q1 %>% gather(key = "variable", value = "value", -idx) %>%
+  ggplot( aes(x=idx, y=value, group=variable, color=variable)) +
+    geom_line()+theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+Note that we normalized the milliseconds (multiply by 100x) so the plot will be in the same scales.
+
+
+
+### Question 2
+
+```{r}
+rm(list=ls())
+```
+
+#### Pre processing
+
+Some technical preprocessing to make sure both data sets have the citie's name in English.
+
+We used a mapping from code to name downloaded from The NBS.
+
+```{r}
+## data_preparation 
+pop = read.csv('population.csv', )
+covid = read.csv('covid_towns.csv')
+code_to_name = read.csv('code_name_mapping.csv')
+code_to_name$name_sub = gsub("-|`|,|'", '', code_to_name$name)
+code_to_name$namenospace = gsub(" ", '', code_to_name$name_sub)
+
+pop = left_join(pop, code_to_name %>% select(c('name_sub', 'code')), by=c('village'='name_sub'))
+
+
+pop = left_join(pop, code_to_name %>%select(c('namenospace', 'code')), by=c('village'='namenospace'))
+
+pop = pop %>% mutate(code = coalesce(pop$code.x , pop$code.y)) %>% select(-c('code.x', 'code.y'))
+
+covid = covid %>% inner_join(pop %>% select(c('code')), by=c('City_Code' = 'code'))
+
+```
+
+The code below will contain the technical steps of:
+
+1.  Sampling 20 cities from the covid data sets.
+2.  Finding their matching data in the demographic data.
+3.  Creating the clustering and dendogram objects that will use us to make some plots and comparisons.
+
+```{r}
+compute_cos_dissimilarity = function(DF) {
+  matrix <- as.matrix(DF)
+  sim <- matrix / sqrt(rowSums(matrix * matrix))
+  sim <- sim %*% t(sim)
+  disim <- as.dist(1- sim)
+  return(disim)
+}
+```
+
+```{r}
+covid_sample = covid[sample(nrow(covid), 20),]
+pop_sample = pop %>% inner_join(covid_sample %>% select('City_Code'), by=c('code' = 'City_Code'))
+covid_sample = covid_sample %>% inner_join(pop_sample %>% select('code', 'village'), by=c('City_Code' = 'code'))
+
+names = colnames(covid_sample)
+rownames(covid_sample) = covid_sample[, 'village']
+covid_sample_mat = covid_sample[grepl("scores*", names)][, -c(1,2,3,4,5)] %>% scale()
+
+rownames(pop_sample) = pop_sample[, 'village']
+pop_sample_mat = pop_sample %>% select(-c('village', 'code')) %>%
+  select(c(3,4,5,6,7,8,9,10,11)) %>% scale()
+
+
+
+pop_clust = hclust(compute_cos_dissimilarity(pop_sample_mat), method = 'average')
+covid_clust = hclust(compute_cos_dissimilarity(covid_sample_mat), method = 'average')
+
+pop_dend = as.dendrogram(pop_clust)
+covid_dend = as.dendrogram(covid_clust)
+```
+
+
+
+In the code section above we created the hierarchical clusters for both covid and the demographic data. We thought on the best way to create the distance $NxN$ matrix for the samples so they will be best suit for the comparison we will make after between the two.
+
+Covid Data - For the dissimilarity matrix we used the cosines distance metric based only on the scores columns of the data. We chose the filter the data to these only as we believed they are capturing in a good way the rest of the data as well (e.g the scores themselves are calculated with respect to other measures like number of cases, vaccination etc..) For our dissimilarity matrix we used the cosines distance. As described here (link to article) the cosines distance calculates the angle between the 2 vectors (the observations in our case),what makes this distance metric a good measure of "style". That is, it will score 2 vectors that "go" in the same direction as close to each other, even if their size is different. In our case, we will cluster similar trends in time represents by the score of different cities even if they had different scores values. We thought it will be a good metric to expose some interesting clusters.
+
+Demographic Data - for the demographic data we disregarded the vehicle columns data, as well as the population and the income. We chose to disregard the population and income as we believe they will create some unwanted connection in our matter, For example we wouldn't want big cities to be clustered together necessarily. We wanted our clusters to represent the cities economical features and priorities and wealth (pct_dgree and pct_woman_income for example) as we believed these features would be better correlated with COVID-19 spreading. For the dissimilarity function we used the cosines distance as well for the same reasons.
+
+Plotting The 2 dendograms colored by K=3 cluster cut.
+
+```{r}
+par(mfrow = c(1,2))
+covid_dend %>% set("labels_cex",0.6) %>% set("labels_col", values=C(1,2,3), k=3) %>%  set("hang_leaves",0.1) %>% set("branches_k_color", k = 3) %>%  plot(main="Covid-19 Dendogram")
+pop_dend %>% set("labels_cex",0.6) %>% set("labels_col", values=C(1,2,3), k=3) %>%  set("hang_leaves",0.1) %>%  set("branches_k_color", k = 3) %>% plot(main="Demographic Dendogram")
+```
+
+```{r}
+dl <- dendlist(covid_dend, pop_dend)
+dl %>% untangle(method = "step1side") %>% set("labels_cex", 0.45) %>% 
+   tanglegram(common_subtrees_color_branches = TRUE)
+```
+
+We can see that when looking at the 3 clusters the similarities are relatively high for the sample chosen. As expected, low socioeconomically cities are clustered together both in the demographic and the Covid dendograms which support the evidence of the same Covid-19 spreading trends we have seen for Arab and Orthodox cities. The higher socioeconomically cities are also clustered together in both dendograms as expected. But there are still some diffrences when looking at the dendograms. Firstly, the height and distinguish between the clusters are way more significant in the Demographic dendogram, that is, it is "easier" to cluster cities based on their demographic data than Covid spreading. This is expected as well as the demographic data is way more deterministic (e.g less flexible) while Covid-19 trends are more prone to be changed rapidly and without any defined structure. Another thing we can spot is that in the lower level (cluster 6+), the two dendograms are less similar. A good explanation for this is that demographic data can be still very different between cities that have same Covid-19 perception. For example, Savyon, being the richest city in Israel, is still far away from Givattaim in terms of their demographic data but their approach towards Covid pandemic is more about the same (both population are well educated, involved politically etc..)
+
+To calculate the correlation between the 2 dendograms we will use the Baker's Gamme coefficient. From the the dendeExtend doc's the coefficient defined as:
+
+> *It is calculated by taking two items, and see what is the highest possible level of k (number of cluster groups created when cutting the tree) for which the two item still belongs to the same tree. That k is returned, and the same is done for these two items for the second tree. There are n over 2 combinations of such pairs of items from the items in the tree, and all of these numbers are calculated for each of the two trees. Then, these two sets of numbers (a set for the items in each tree) are paired according to the pairs of items compared, and a Spearman correlation is calculated.*
+
+Hence Baker's coefficient takes values in (-1,1) the same as Spearman correlation. higher (absolute score) means the dendograms are similar while values near 0 means they aren't statistically similar.
+
+To be able to define the P-value we will need to use permutation test. The test purpose is to check that our baker's score is significant, that is, depends on the topological order of the dendogrmas. To check this, we will need to permutate the labels of one of the trees many times, calculating the Baker's gamma each time to receive a distribution if the Baker's index under the null hypothesis - Our fixed tree topology.
+
+The bakers gamma correlation between the Covid and Demographic dendograms is:
+
+```{r}
+cor_bakers_gamma(pop_dend, covid_dend)
+```
+
+```{R}
+the_cor <- cor_bakers_gamma(covid_dend, pop_dend)
+R <- 100
+cor_bakers_gamma_results <- numeric(R)
+dend_mixed <- covid_dend
+for(i in 1:R) {
+   dend_mixed <- sample.dendrogram(dend_mixed, replace = FALSE)
+   cor_bakers_gamma_results[i] <- cor_bakers_gamma(pop_dend, dend_mixed)
+}
+
+plot(density(cor_bakers_gamma_results),
+     main = "Baker's gamma distribution under H0",
+     xlim = c(-1,1))
+abline(v = 0, lty = 2)
+abline(v = the_cor, lty = 2, col = 2)
+legend("topleft", legend = c("Original Score"), fill = c(2))
+round(sum(the_cor < cor_bakers_gamma_results)/ R, 4)
+
+
+title(sub = paste("One sided p-value:",round(sum(the_cor < cor_bakers_gamma_results)/ R, 4)
+                  ))
+```
+
+We ran 100 permutation tests to get the distribution above Running it we can see that the similarity between our dendograms is significant (P-value\~0). and we can conclude that our trees are significantly similar as defined by Baker's index.
+
+### Question 3
+
+```{r}
+rm(list=ls())
+```
+
+
+
+In this question we will create the K-means algorithm from scratch for the genes data and will use Shiny App to allow the user to interact and explore the data.
+
+The codes is divided in 3 main function:
+
+1.  PreProcess - the get_data and preprocess functions are preforming these actions on our data \
+    a. Log transform\
+    b. Taking the top 200 features with the highest variance across examples\
+    c. Transposing our data so every row is a tissue and every column is some gene.\
+    d. Scaling the data and correcting the names of the genes.
+2.  my_kmeans - k-means algorithm written from scratch by us. Returns the clusters, their centers and the WSS score vector for each iteration.
+
+The shiny app we made allows the user to interact with the data in 2 ways after preforming the clustering:
+
+1.  Feature by Feature plot - the user can plot any 2 features side by side in a scatter plots, colored by the clusters.
+2.  PCA plot - the user can decide to plot the first 2 components of the PCA process colored by clusters.
+
+In both cases the user can define the number of clusters which will immediately effect the plots. (from 2 to 9, any more than this doesn't make really sense as we have only 20 observations).
+
+To run the app you should run the whole block below. The get_data function may take a few seconds to run.
+
+![an image of the shiny app.](clustering_app_image.jpeg)
+
+
+```{r, eval=FALSE }
+library(shiny)
+
+
+preprocess = function(data){
+  log_mat = log(1 + as.matrix(data))
+  data_with_var = cbind(diag(cov(t(log_mat))), log_mat)
+  reduced_data = data_with_var[order(data_with_var[,1], decreasing=TRUE),-c(1)] %>%
+    head(200) %>% t() %>% scale() %>% data.frame()
+  return(reduced_data)
+  
+}
+
+
+get_data = function(){
+  data=read.delim( "gtex.txt",skip=2,row.names=c( 1 ) , header = TRUE)
+  gen_data = data[, -1]
+  gen_names = data[, 1, drop=FALSE]
+  reduced_data = preprocess(gen_data)
+  colnames(reduced_data) = unlist(lapply(colnames(reduced_data), function(name) gen_names[name,]))
+  return(reduced_data)
+}
+
+my_kmeans = function (data, k, max_iter=10000){
+  data = as.matrix(data)
+  centroids = data[sample(nrow(data), k),] %>% unname()
+  wss = c()
+  for(i in 1:max_iter){
+    origin_centroids = centroids
+    
+    ## update cluster labels
+    clusters = unlist(lapply(seq_len(nrow(data)), 
+                             function(i) which.min(sqrt(colSums(
+                               (data[i, ] - t(centroids))^2)))))
+    
+    ## update centroids
+    for(i in 1:k){
+      centroids[i, ] = colMeans(data[clusters == i, ,drop = FALSE])
+    }
+    
+    ## stop if converged
+    if(all(rowSums(centroids) == rowSums(origin_centroids))){
+      break
+    }
+    
+    ## wss
+    val = sum(unlist(lapply(seq(1:k), function(i) sum(rowSums((data[clusters == i, ,drop = FALSE] - centroids[i,])^2 )))))
+    wss = c(wss, val)
+  }
+  
+  ## calculate WSS
+  
+  ## return
+  
+  return(list(clusters=clusters, wss=wss, centroids=centroids))
+  
+}
+
+data = get_data()
+
+server = function(input, output, session) {
+  
+  # Combine the selected variables into a new data frame
+  selectedData <- reactive({
+    data[, c(input$xcol, input$ycol)]
+  })
+  
+  clusters <- reactive({
+    my_kmeans(data, input$clusters)
+  })
+  
+  pca_res <- prcomp(data, scale. = TRUE)
+  
+  output$plot1 <- renderPlot({
+    
+    palette(c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3",
+              "#FF7F00", "#FFFF33", "#A65628", "#F781BF", "#999999"))
+    
+    par(mar = c(5.1, 4.1, 0, 1))
+    if(input$plotType == 'features'){
+      plot(selectedData(),
+           col = clusters()$clusters,
+           pch = 20, cex = 3)
+    } else {
+      autoplot(pca_res, data=data, colour=clusters()$clusters)
+    }
+  })
+  
+}
+
+
+vars = names(data)
+
+ui = pageWithSidebar(
+  headerPanel('Gtex K-means Clustering App'),
+  sidebarPanel(
+    selectInput("plotType", "Plot Type",
+      c('Feature by Feature' = "features", 'PCA' = "pca")
+    ),
+    conditionalPanel(
+      condition = "input.plotType == 'features'",
+      selectInput('xcol', 'X Variable', vars),
+      selectInput('ycol', 'Y Variable', vars, selected = vars[[2]]),
+    ),
+    numericInput('clusters', 'Cluster count', 3, min = 2, max = 9)
+  ),
+  mainPanel(
+    plotOutput('plot1')
+  )
+)
+
+
+
+
+shinyApp(ui, server)
+
+```
