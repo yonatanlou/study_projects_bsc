@@ -1,0 +1,607 @@
+---
+title: "Final Lab"
+date: "4/21/2022"
+output:
+  html_document:
+    rmarkdown::html_document:
+    theme: journal
+    toc: true
+    toc_depth: 2
+    df_print: paged
+
+    
+---
+ID: 204767644
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+```{r include = FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo=FALSE )
+```
+
+```{r ECHO=FALSE,message=FALSE, warning=FALSE}
+## packages
+set.seed(42)
+library(ggplot2)
+library(dplyr)
+library(caret)
+library(tidyr)
+library(mltools)
+library(matrixStats)
+library(data.table)
+library(e1071)
+library(ggExtra)
+library(ranger)
+library(randomForest)
+library(LogicReg)
+require(gridExtra)
+```
+## 1. Theoretical Questions 
+1. When increasing the *K* in the Knn algorithm, the estimator's variance will be *lower*. This is because each observation is more biased than the base case, when k=1. Then our fitting will be more flexible, with lower variance (this is also derived from the bias-variance trade-off).
+
+2. When increasing the *K* in the *Knn* algorithm, the bias squared of the estimator will get *higher*. When  k=1 we have the most complex model with high over-fitting and the lowest bias. This is because each sample is suitable for itself. when the k gets higher we will categorize everything as belonging to the majority class, and the bias will be *higher*.
+
+3. The variance of our model will *decrease* when n, the number of training points, is increased. As we are exposed to more data in general, variance *decreases*. This is due the fact that the standard deviation of the sum of two random variables is smaller than the sum of the standard deviations (equal when the two variables are perfectly correlated). 
+this is also true for the *KNN* algorithm, For large training sample size the points in the neighborhood are likely
+to be close to the real data. (Elements of statistical theory, p. 19)
+
+4. The bias will not necessarily change if n, the number of training points, is increased.
+This is due to the simple fact that $E_\theta[\hat\theta_n−\theta]$  does not converge to 0 as $n\rightarrow\infty$.
+Adding data may result in some additional points being near to the selected model while others may be farther away, reducing the impact on the bias metric. As i mentioned earlier, bias rises when *k* is raised. However, it cannot be assumed that including more data points will have a favorable or negative impact on the bias, or the distance of the new points from their forecast. 
+
+
+## 2.
+```{r, echo=FALSE}
+df <- read.csv("tree_train_set.csv")
+# paste0("There is ",sum(sapply(df, function(x)any(is.na(x)))), " columns with NaNs")
+df$dist_to_water = sqrt(df$Hor_dist_to_water^2+df$Vert_dist_to_water^2)
+
+```
+
+
+```{r}
+df <- df %>%
+  gather(key=Region, value=region.indicator,wilderness_1:wilderness_4)%>%
+  filter(region.indicator==1) %>%
+  select(-region.indicator)
+
+df$Region <- ifelse(df$Region=="wilderness_1","Rawah",
+                        ifelse(df$Region=="wilderness_2","Neota",
+                        ifelse(df$Region=="wilderness_3","Comanche Peak",
+                               "Cache la Poudre")))
+df$Region <- as.factor(df$Region)
+df$tree_type <- as.character(df$tree_type)
+df$tree_type <- ifelse(df$tree_type==1,"Spruce","Lodgepole Pine")
+df$tree_type = as.factor(df$tree_type)
+df <- df %>%
+  gather(key=soil, value=soil.indicator,soil_1:soil_40)%>%
+  filter(soil.indicator==1) %>%
+  select(-soil.indicator)
+df$soil <- as.factor(df$soil)
+
+```
+
+
+
+```{r}
+
+p <- ggplot(data=df) +
+  geom_point(aes(x=dist_to_water,
+                 y=Elevation,
+                 color=tree_type
+                ),alpha=0.5) + 
+  xlab("Eucledian distance to water") + 
+  guides(color = guide_legend(title = "Tree type")) + 
+   theme_bw() + 
+  theme(legend.position = "bottom")+
+  scale_color_brewer(palette = "Set1")+
+  ggtitle("Elevation vs distance to water (by tree type)")
+  
+p1 <- ggMarginal(p, type="histogram")
+p1
+```
+```{r}
+mean_Lodgepole <- round(mean(df[ which(df$tree_type=='Lodgepole Pine'), ]$dist_to_water,2))
+mean_spruce <- round(mean(df[ which(df$tree_type=='Spruce'), ]$dist_to_water,2))
+```
+
+
+You can clearly see that Lodgepole Pine is in higher Elevation level than the Spruce.
+You can also see that there is a strong correlation between the distance to water ($\sqrt{D_{Horizontal}^2+D_{Vertical}^2}$) and to the Elevation. This make sense due to the fact that the gravity have a straight impact on the water location.
+Both of the trees have a pretty similar distribution of the distance to water attribute (average dist_to_water Lodgepole Pine: `r mean_Lodgepole`, average dist_to_water Spruce.: `r mean_spruce`). But the Spurce have lower covariance with the dist_to_water.
+Ive also plotted the density on the y and x axis - the density of the elevation seems like a guasssian mixture model, which include the mean of $E(Elevation=e|Y=1)$ and  $E(Elevation=e|Y=2)$.
+
+
+
+
+## 3.
+### a
+The estimate_naive_bayes is calculating 2 matrices and one vector.
+mean_x_given_y is matrix $2\times p$ which store all of the $E(X=x|Y=y)$
+sd_x_given_y is matrix $2\times p$ which store all of the $\sqrt{var(X=x|Y=y)}$
+priors is a vector $2\times 1$ which stores $P(Y)$. $\rightarrow$
+
+```{r, echo=TRUE}
+estimate_naive_bayes = function(train_x, train_y, category_cols) {
+  #making 2xp talbe to store E(X=x|Y=y)
+  mean_x_given_y <-
+    cbind(train_x, train_y) %>% group_by(train_y) %>% summarise(across(everything(), mean))
+  #making 2xp talbe to store sd(X=x|Y=y)
+  sd_given_y <-
+    cbind(train_x, train_y) %>% group_by(train_y) %>% summarise(across(everything(), sd))
+  
+  #making 2x1 vector to store P(Y=y)
+  priors <- as.data.frame(prop.table(table(train_y)))
+  
+  naive_bayes_obj <-
+    list(
+      "mean_x_given_y" = mean_x_given_y[-1],
+      "sd_given_y" = sd_given_y[-1],
+      "priors" = priors,
+      "category_cols" = category_cols
+    )
+  return(naive_bayes_obj)
+}
+
+
+```
+
+The p_x_given_y_gaussian is calculating the gaussian liklihood given some x. I know that this is a hard assumption that all of the continues variables come from normal distribution. But i actually didnt have the time to implement the KDE method for the unnormal distributed variables.
+For the categorial variables it more simple so it is implemented directly in the main function.
+
+The predict_per_row is the main function of the prediction process. Given a row, the function calculate (different for categorical or continues) the posterior probability of each one of the features.
+All this data will gathered inside probs_data. The last phase of the function is taking the product of each row (or we can use the logSum = TRUE), and labeling the max row with the comprehense class.
+
+I wanted also the laplace smoother option but didnt have time to do so.
+
+```{r, echo=TRUE}
+p_x_given_y_gaussian <- function(x_val, mean.x, sd.x) {
+  denominator = (sd.x * sqrt(2 * pi))
+  nominaotr = exp(-((x_val - mean.x) ^ 2) / (2 * sd.x ^ 2))
+  return(nominaotr / denominator)
+}
+
+predict_per_row  <-
+  function(naive_bayes_obj, test_x, logSum = FALSE) {
+    category_cols = naive_bayes_obj$category_cols
+    mean_x_given_y = as.matrix(naive_bayes_obj$mean_x_given_y)
+    sd_given_y = as.matrix(naive_bayes_obj$sd_given_y)
+    classes_num <- length(unique(train_y))
+    #2Xp matrix which will store all the probs.
+    probs_data <-
+      data.frame(matrix(
+        data = NA,
+        nrow = classes_num,
+        ncol = dim(train_x)[2]
+      ))
+    pred_vec <-  c()
+    for (i in 1:classes_num) {
+      #for each class
+      for (j in 1:length(test_x)) {
+        #for each feature
+        if (category_cols[j]) {
+          #handling categorical features
+          if (test_x[j] == 1) {
+            probs_data[i, j] = mean_x_given_y[i, j]
+          }
+          else {
+            probs_data[i, j] = 1 - mean_x_given_y[i, j]
+          }
+        }
+        else {
+          #handling continues features
+          probs_data[i, j] = p_x_given_y_gaussian(test_x[j], mean_x_given_y[i, j], sd_given_y[i, j])
+        }
+      }
+    }
+    
+    #merge the priors into the probs table
+    priors <- naive_bayes_obj$priors
+    rownames(priors) <- priors$train_y
+    rownames(probs_data) <- c(1:classes_num)
+    probs_data <- merge(probs_data, priors, by = "row.names", all = TRUE)
+    probs_data <- subset(probs_data, select = -c(train_y, Row.names))
+    
+    #product for each row:
+    if (logSum) {
+      res <- apply(probs_data, 1, logSumExp)
+    }
+    else {
+      res <- rowProds(as.matrix(probs_data))
+    }
+    
+    # get the row(class) with the max probs product:
+    pred_vec <- c(pred_vec, (which.max(as.numeric(unlist(
+      res
+    )))))
+    return(pred_vec)
+  }
+
+#main function for prediction (to iterate over all rows)
+predict_naive_bayes = function (naive_bayes_obj, test_x) {
+  res = c()
+  for (i in 1:nrow(test_x)) {
+    vec <- as.vector(t(test_x[i,]))
+    res <- c(res, predict_per_row(naive_bayes_obj, vec))
+  }
+  stopifnot( length(res) == nrow(test_x))
+  return(res)
+}
+```
+
+```{r}
+df <- read.csv("tree_train_set.csv")
+df <- df[, -c(1)]
+train.fraction <- 0.75
+df$tree_type <- as.factor(df$tree_type)
+train.ind <- sample(nrow(df),round(train.fraction*nrow(df)))
+train <- df[train.ind,]
+train_x <- train %>% select(-c("tree_type"))
+train_y <- train[, "tree_type"]
+
+test <- df[-train.ind,]
+test_x <- test %>% select(-c("tree_type"))
+test_y <- test[, "tree_type"]
+
+```
+
+
+```{r, echo=TRUE, eval=FALSE}
+category_cols <- apply(train_x, 2, function(x) {
+  all(x %in% 0:1)
+})
+naive_bayes_obj <-
+  estimate_naive_bayes(train_x, train_y, category_cols)
+preds <- predict_naive_bayes(naive_bayes_obj, train_x)
+confMatMine <- confusionMatrix(as.factor(train_y), as.factor(preds))
+
+nb_r <- naiveBayes(tree_type ~ ., data = df)
+y_pred <- predict(nb_r, newdata = train_x)
+confMat <- confusionMatrix(as.factor(train_y), as.factor(y_pred))
+
+```
+
+
+
+```{r}
+# save(category_cols,naive_bayes_obj,preds,confMatMine,nb_r,y_pred,confMat, file = "q_3_a_data.RData") 
+load("q_3_a_data.RData")
+```
+
+My NaiveBayes classifier have an `r as.double(confMatMine$overall["Accuracy"])` accuracy, while the NaiveBayes from the package e1071 got `r as.double(confMat$overall["Accuracy"])`!
+
+
+### b
+The naive method ive used here is to run over all of the permutations of the pairs (including single features). For each pair, i am running a cross validation and save the mean cross validation accuracy.
+If the data had a bit more columns it was unfeasible to do so. In that case - i were probably try to reduce the dimension with one of the regularization methods that we learn (lasso for example) or maybe even run a classifier to detect which are the most important feature.
+
+* I removed degenerate (sparse) columns with only zeros.
+```{r,  eval=FALSE,echo=TRUE}
+k_fold_cv <- function(df, k) {
+  accuracies <- c()
+  df$tree_type <- as.factor(df$tree_type) 
+  df<-df[sample(nrow(df)),]
+  folds <- cut(seq(1,nrow(df)),breaks=k,labels=FALSE)
+  for(k in 1:k){
+      testIndexes <- which(folds==k,arr.ind=TRUE)
+      testData <- df[testIndexes, ]
+      trainData <- df[-testIndexes, ]
+      test_x <- testData %>% select(-c("tree_type"))
+      test_y <- testData[, "tree_type"]
+      nb_model <- naiveBayes(tree_type ~ ., data = trainData)
+      # Predicting on test data
+      y_pred <- predict(nb_model, newdata = test_x)
+      # Model Evaluation
+      confusionMat <- confusionMatrix(as.factor(test_y), as.factor(y_pred))
+      accuracy <- confusionMat$overall["Accuracy"] 
+      accuracies <- c(accuracies, accuracy)
+  }
+  return(mean(accuracies))
+} 
+
+df$dist_to_water = sqrt(df$Hor_dist_to_water^2+df$Vert_dist_to_water^2)
+df_deg <- df[, colSums(df != 0) > 0] #removing degenerate columns
+datalist = list()
+all_cols <- colnames(df_deg)
+drop <- c("tree_type","wilderness_1","wilderness_2")
+all_cols = all_cols[!(all_cols %in% drop)]
+#making the permutations
+cols_perms <- combn(all_cols,2) # All combinations
+# print(paste("There are", dim(cols_perms)[2], "permutations"))
+for (i in 1:dim(cols_perms)[2]) {
+  cols <- c("tree_type", cols_perms[, i])
+  cols_formatted <- paste0(cols_perms[, i][1],"_" , cols_perms[, i][2])
+  curr_df <- df_deg[, cols]
+  cv_mean_accuracy <- k_fold_cv(curr_df, 2)
+  data = c(cols_formatted=cols_formatted, cv_mean_accuracy=cv_mean_accuracy)
+  datalist[[i]] <- data
+}
+for (i in 1:length(all_cols)) {
+  cols <- c("tree_type", all_cols[i])
+  curr_df <- df_deg[, cols]
+  cv_mean_accuracy <- k_fold_cv(curr_df, 5)
+  data = c(cols_formatted=all_cols[i], cv_mean_accuracy=cv_mean_accuracy)
+  datalist[[i]] <- data
+  
+}
+final_results <- dplyr::bind_rows(datalist)%>% arrange(desc(cv_mean_accuracy))
+head(final_results )
+
+
+
+```
+```{r}
+final_results <- readRDS("final_results_3_b.RDS")
+final_results
+best_features <-sub('_', ' and ', final_results[1,1] )
+```
+
+We can see that the best feature is: `r best_features`
+
+
+### c
+```{r}
+df <- read.csv("tree_train_set.csv")
+df <- df[, -c(1)]
+continuous_cols <-
+    colnames(df[, !(apply(df, 2, function(x) {
+      all(x %in% 0:1)
+    }))])
+
+train.fraction <- 0.8
+train.ind <- sample(nrow(df),round(train.fraction*nrow(df)))
+
+train <- df[train.ind,c(continuous_cols)]
+test_wilderness <- df[-train.ind,]
+test <- df[-train.ind,c(continuous_cols)]
+
+naiveBayes <- naiveBayes(tree_type ~ ., data = train)
+ 
+# Predicting on test data'
+x_test <- test %>% select(-c("tree_type"))
+y_test <- test[,"tree_type"]
+y_pred <- predict(naiveBayes, newdata = x_test)
+
+results <- data.frame(y_pred, y_test, test_wilderness[,c("wilderness_1","wilderness_2")])
+results$true_pred <- results$y_pred==results$y_test
+
+results <- results %>%
+  gather(key=Region, value=region.indicator,wilderness_1:wilderness_2)%>%
+  filter(region.indicator==1) %>%
+  select(-region.indicator)
+
+results$Region <- ifelse(results$Region=="wilderness_1","Rawah","Neota")
+
+  
+```
+
+```{r}
+library(scales)
+df <- df %>%
+  gather(key=Region, value=region.indicator,wilderness_1:wilderness_4)%>%
+  filter(region.indicator==1) %>%
+  select(-region.indicator)
+
+df$Region <- ifelse(df$Region=="wilderness_1","Rawah",
+                        ifelse(df$Region=="wilderness_2","Neota",
+                        ifelse(df$Region=="wilderness_3","Comanche Peak",
+                               "Cache la Poudre")))
+df$Region <- as.factor(df$Region)
+df$value <- 1
+df$tree_type <- as.character(df$tree_type)
+df$tree_type <- ifelse(df$tree_type==1,"Spruce","Lodgepole Pine")
+df$tree_type = as.factor(df$tree_type)
+
+plot1 <- ggplot(results) +
+  geom_bar(aes(x=Region, fill=factor(true_pred)),
+           position = "dodge")+
+   theme_bw() + 
+  theme(legend.position = "bottom")+
+  scale_fill_brewer(palette = "Set1", name="Predictions") +
+  ggtitle("Tree type predictions vs Region")
+
+
+ plot2 <- ggplot(df, aes(x = Region, fill=Region)) +  
+        geom_bar(aes(y = (..count..)/sum(..count..))) + 
+        ## version 3.0.0
+        scale_y_continuous(labels = scales::percent)+scale_fill_brewer(palette = "Set6") + theme_bw()+theme(legend.position = "bottom")+ggtitle("Frequency of each region") +ylab("count")
+
+grid.arrange(plot1, plot2, ncol=2)
+
+
+
+```
+
+
+
+We can see clearly that we have better predictions on the Rawah region. We can also see that in general, the Rawah region have more samples. Due to how naive bayes works - this fact will affect the algorithm drastically.
+Because this is a categorical variable, the number of samples impact directly on the likelihood, which lower the chances to classify Neota region.
+Moreover, I saw in the EDA process that the regions have a good correlation with a lot of the features;
+The high correlation could affect the classifier as well (though in naive bayse we are assume independecy when we product the probabilities).
+
+
+## 4.
+### a.
+First, i wanted to choose the right classifier for this task considering that i need to predict between two classes.
+
+The task of choosing the best algorithm is not easy. I got some help from here: [machine-learning-algorithm-cheat-sheet](https://docs.microsoft.com/en-us/azure/machine-learning/media/algorithm-cheat-sheet/machine-learning-algorithm-cheat-sheet.png#lightbox)
+
+I chose to try the following: SVM, random forest, logistic regression, gradient boosting.
+
+As for the preprocessing of the data - i added a column for the euclidean distance to water, and decided not to scale any of the data (got worster perfromance)
+```{r}
+df <- read.csv("tree_train_set.csv")
+df <- df[, -c(1)]
+train.fraction <- 0.8 
+df$tree_type <- as.factor(df$tree_type)
+df$dist_to_water = sqrt(df$Hor_dist_to_water^2+df$Vert_dist_to_water^2)
+train.ind <- sample(nrow(df),round(train.fraction*nrow(df)))
+train <- df[train.ind,]
+test <- df[-train.ind,]
+
+train_x <- train %>% select(-c("tree_type"))
+train_y <- train[, "tree_type"]
+
+
+test_x <- test %>% select(-c("tree_type"))
+test_y <- test[, "tree_type"]
+
+```
+
+
+```{r, echo=TRUE, eval=FALSE}
+trainControl <- trainControl(method="repeatedcv", number=5, repeats=2,
+)
+#list of model to tune
+algorithmList <- c('rf', 'svmLinear', 'glmnet', 'xgbTree')
+#model tuning
+set.seed(42)
+models <- lapply(algorithmList,function(x){
+  train(
+    tree_type ~ .,
+    data = train,
+    method = x,
+    trControl = trainControl,
+    metric='Accuracy',
+  )
+})
+```
+
+```{r, echo=FALSE}
+algorithmList <- c('rf', 'svmLinear', 'glmnet', 'xgbTree')
+models <- readRDS("models.RDS")
+```
+
+
+```{r, echo=FALSE, , eval=TRUE}
+models <- setNames(models,algorithmList)
+model_selection_results <- resamples(models)#results from cv
+bwplot(model_selection_results)
+```
+And i will validate this result on a separate validation set:
+```{r}
+predicted <-
+  list(
+    rf = predict(models[[1]], test),
+    svmLinear = predict(models[[2]], test),
+    logreg = predict(models[[3]], test),
+    xgbTree= predict(models[[4]], test)
+  )
+
+cm <- lapply(predicted,confusionMatrix,reference=test$tree_type,positive="1")
+acc <- lapply(cm,function(x){
+  o <- x$overall[1:2]
+  b <- x$byClass[5:7]
+  df <- c(o,b)
+})
+models_results <- round(do.call(rbind,acc),3)
+models_results
+```
+
+The random forest is by far the best model.
+I could have spend more computing time and try to fit the best parameters for each on of the models, but I decided to focus on the random forest model.
+Now ill try to optimize the RandomForest model by HyperParameter tuning.
+I can try an enormous combination of the hyperParameters, but i wish to tune only the most important one (will save time and money). 
+For our data dimensions (20,000, 55), the most important parameters are mtry(max.features) and min.sample leaf.
+
+Random Forest Hyper Parameter importance:
+![](hyper_parameters_rf.jpeg){width=25%, height=25%}
+
+[An Empirical Study of Hyperparameter Importance Across Datasets](https://tr.informatik.uni-freiburg.de/reports/report293/report00293.pdf) (by J. N. van Rijn, F. Hutter)
+
+Let's tune those parameters:
+```{r, echo=TRUE, eval=FALSE}
+n_features <- ncol(train)
+hyper_grid <- expand.grid(
+  mtry = floor(n_features * c( .6, .7, .8, .9, .95)),
+  min.node.size = c(1, 3, 5, 10),
+  replace = c(TRUE, FALSE),
+  rmse = NA
+)
+print(paste(nrow(hyper_grid), "combinations"))
+for(i in seq_len(nrow(hyper_grid))) {
+  print(paste(i, "combination"))
+  fit <- ranger(
+    formula         = tree_type ~ ., 
+    data            = train[1:5000,], 
+    num.trees       = n_features * 10,
+    mtry            = hyper_grid$mtry[i],
+    min.node.size   = hyper_grid$min.node.size[i],
+    replace         = hyper_grid$replace[i],
+    verbose         = FALSE,
+    seed            = 42,
+    respect.unordered.factors = 'order',
+  )
+  hyper_grid$rmse[i] <- sqrt(fit$prediction.error)
+}
+hyper_grid <- hyper_grid %>% arrange((rmse))
+
+```
+
+
+```{r}
+hyper_grid <- readRDS("hyper_grid.RDS")
+```
+
+
+I have the best hyperParameters. Now i can train the model and test it with validation data (will test in section c).
+
+```{r}
+n_features <- ncol(train)
+train.fraction <- 0.8 
+df$tree_type <- as.factor(df$tree_type)
+
+
+```
+
+
+
+```{r, echo=TRUE}
+rf <- randomForest(formula = tree_type ~ ., data = df,mtry=hyper_grid[1,]$mtry,nodesize=hyper_grid[1,]$min.node.size, ntree=n_features * 10, replace=hyper_grid[1,]$replace)
+
+```
+
+### b.
+```{r, echo=TRUE}
+test_set <- read.csv("tree_test_new_feat.csv")
+test_set <- test_set[, -c(1)]
+test_set$dist_to_water = sqrt(test_set$Hor_dist_to_water^2+test_set$Vert_dist_to_water^2)
+
+final_preds <- predict(rf, test_set)
+write.csv(final_preds,"204767644.csv")
+
+```
+
+
+### c.
+```{r}
+train.ind <- sample(nrow(df),round(train.fraction*nrow(df)))
+train <- df[train.ind,]
+test <- df[-train.ind,]
+```
+
+
+```{r, echo=TRUE}
+rf_eval <- randomForest(formula = tree_type ~ ., data = train,mtry=hyper_grid[1,]$mtry,nodesize=hyper_grid[1,]$min.node.size, ntree=n_features * 10, replace=hyper_grid[1,]$replace)
+p1 <- predict(rf_eval, test)
+confusionMatrix(p1, test$tree_type)$overall["Accuracy"]
+
+```
+
+```{r}
+ci_interval <- round(confusionMatrix(p1, test$tree_type)$overall["AccuracyUpper"] - confusionMatrix(p1, test$tree_type)$overall["AccuracyLower"],2)
+```
+
+So im expecting to a `r round(confusionMatrix(p1, test$tree_type)$overall["Accuracy"],2)` with CI of  `r ci_interval`
+
+```{r}
+# save(final_results,algorithmList,models, n_features,hyper_grid , file = "data.RData")
+```
+
+```{r}
+
+```
+
