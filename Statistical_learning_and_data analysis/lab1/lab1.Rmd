@@ -1,0 +1,384 @@
+---
+title: "Lab1"
+author: "Yonnatan Lourie, Eitan Zimmerman"
+date: "3/19/2022"
+output:
+  html_document:
+    rmarkdown::html_document:
+    theme: journal
+    toc: true
+    toc_depth: 2
+    df_print: paged
+
+    
+---
+
+
+```{r setup, include=FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+```{r include = FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo=FALSE )
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(janitor)
+library(dplyr)
+library(zoo)
+library(DataExplorer)
+library(gghighlight)
+library(grid)
+library(readxl)
+library(ggrepel)
+library(stringi)
+library(tidyr)
+library(magrittr)
+library(MASS)
+library(tibble)
+library(ggfortify)
+library(plotly)
+
+set.seed(42)
+```
+
+
+```{r}
+load("accidents_2013_2019.rdata")
+df <- accidents
+```
+
+## Data Cleaning
+
+```{r, eval=FALSE}
+str(df)
+```
+
+### Converting dates from string to Date type
+
+
+```{r,echo = TRUE, results = 'hide', message=FALSE}
+df$D_month <- do.call(
+  recode,
+  c(list(df$Month), setNames(c(10,7,12,3,4,11,1,9,6,8,5,2), c("אוקטובר", "יולי", "דצמבר", "מרס", "אפריל", "נובמבר", "ינואר", "ספטמבר", "יוני", "אוגוסט", "מאי","פברואר") ))
+)
+```
+
+
+
+```{r}
+df$Date <- as.yearmon(paste(df$Year, df$D_month), "%Y %m")
+```
+
+### Cleaning nulls
+
+```{r, eval=FALSE}
+sort(colSums(is.na(df)))
+```
+We can see that there is 20 nulls in the "Must have" columns, so we can omit those rows:
+
+```{r, eval=FALSE}
+df[is.na(df$Month),]
+```
+```{r}
+df <- df[!is.na(df$Month),]
+```
+
+
+The other problematic nulls are the columns: Road_Name_1, Town_Name, Road_Name_2, Road_Location, Road_Name_3, Road_Name_4.
+
+After watching the data, i can tell that `r 620/1575` of the nulls are from junctions so it make sense, and the other nulls are most of them from small cities.
+```{r, eval=FALSE}
+df[is.na(df$Road_Name_1  ),] %>% group_by(Road_Type) %>% summarise(n=n())
+```
+
+```{r, eval=FALSE}
+df[is.na(df$Road_Name_1  ) & df$Road_Type=="עירונית לא בצומת",]
+```
+
+
+
+
+
+
+## 1. Graph Critique 
+### a. What questions / stories the graphic is trying to answer?
+
+Graph 1 - The graph trying to answer the question if the number of accidents per months in Haifa metropolin is changing? Does the pattern is completely random? or we can infer some insights about particular months or years. We also can see pretty clearly which months our above or below the average.
+
+Graph 2 - The graph tries to show three main things - the relationship between religion, age and road accidents. We can see pretty clearly that in the arab cities there are more accidents by minors (in comparison to the other cities).
+
+### b. Do they answer successfully?
+I think they answer successfully, but they are not descriptive enough, the second graph need a few seconds to analyze it.
+
+### c. Do they raise new questions not addressed?
+Yes, for the first graph we can ask which types of accidents occur on this years? what was the weather?
+How big the population become through the years, etc.
+For the second graph we will also want to ask which accidents was in each one of the cities. Maybe we can ask in which roads this accidents happen, etc.
+
+### d. Please suggest one way in which these figures can be improved
+For the first graph i would plot the number of days with rain for each year, and will split the line for 2 lines - deaths and injured.
+
+For the second line i would split the graph for more graphs by type to see maybe why we have more accidents with minors at the arab settlements.
+
+## 2. Reproducing these analyses
+
+### a. A graphic summarizing the total number of accidents by month showing the yearly cycles.
+
+
+```{r}
+df$count = 1
+df$Date <- as.Date(as.yearmon(df$Date, "%b %d"))
+
+```
+
+```{r}
+data_1st_graph <- df %>% 
+  group_by(Date) %>% 
+  summarise(n=n()) 
+
+```
+
+```{r}
+bluelines <- c()
+divider <- round(length(unique(sort(df$Date)))/6)
+for (i in 1:length(unique(sort(df$Date)))) {
+  if (i%%divider==0) {
+
+    bluelines <- c(bluelines, unique(sort(df$Date))[i])
+  }
+  
+}
+bluelines <- as.Date(bluelines)
+
+```
+
+
+```{r}
+data_1st_graph <- df %>% 
+  group_by(Date) %>% 
+  summarise(n=n()) 
+
+grob <- grobTree(textGrob("October 2016", x=0.5,  y=0.55, hjust=0,
+  gp=gpar(col="black", fontsize=8, fontface="italic")))
+
+
+ggplot(data_1st_graph, aes(x=Date, y=n))+
+  geom_line(size=0.4, alpha=0.9, linetype=1) +
+  geom_point(size=0.7)+
+  geom_vline(xintercept=bluelines, linetype="dashed", color = "blue") +
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y %b")+
+   theme(axis.text.x=element_text(angle=60, hjust=1)) +
+  geom_hline(aes(yintercept = mean(n)), color="red", alpha=1/4)+
+ ylim(0,500)+annotation_custom(grob)+
+  ggtitle("Accidents by month in Israel")+theme( panel.border = element_rect(colour = "black", fill=NA, size=1))
+```
+
+
+### b. A graphic comparing per city the average number of yearly injuries to children vs. adults.
+
+
+
+
+```{r}
+YEARS <- 7
+df_2_b <-  df[c("Injured_0_19","Injured_20_64","Injured_65_plus","Town_Name")]
+df_2_b$Adults <-df_2_b$Injured_20_64 + df_2_b$Injured_65_plus  
+
+df_2_b <- df_2_b[c ("Town_Name", "Adults","Injured_0_19")]
+
+df_2_b_adults <- aggregate(df_2_b$Adults, by= list(df_2_b$Town_Name),sum)
+df_2_b_minors <- aggregate(df_2_b$Injured_0_19, by= list(df_2_b$Town_Name),sum)
+
+
+colnames(df_2_b_minors) = c ("City", "Minors")
+colnames(df_2_b_adults) = c ("City", "Adults")
+
+df_2_b_adults$Adults <- (df_2_b_adults$Adults)/YEARS
+df_2_b_minors$Minors <- (df_2_b_minors$Minors)/YEARS
+
+df_2_b_minors <- df_2_b_minors %>% filter(Minors >= 10) 
+df_2_b_adults <- df_2_b_adults %>% filter(Adults >= 10) 
+
+
+df_crimes <- merge(df_2_b_minors, df_2_b_adults, by.x = "City", by.y = "City")
+```
+
+
+
+```{r}
+
+bycode2020 <- readxl::read_excel("bycode2020.xlsx")
+bycode2020 <- bycode2020[c("שם יישוב","דת יישוב")]
+
+df_2_b_results <- merge(df_crimes, bycode2020, by.x = "City", by.y = "שם יישוב")
+colnames(df_2_b_results) <- c("City","Minors","Adults","Relligion")
+df_2_b_results$City <-lapply(df_2_b_results$City, stringi::stri_reverse)
+
+df_2_b_results$Relligion[df_2_b_results$Relligion == 1 ] = "Jewish"
+df_2_b_results$Relligion[df_2_b_results$Relligion == 2 ] = "Not Jewish"
+df_2_b_results$Relligion[df_2_b_results$Relligion == 4 ] = "Mixed"
+
+
+slope <- sum(df_2_b_results$Minors)/sum(df_2_b_results$Adults)
+plot_2_b <- ggplot(df_2_b_results,aes(x=Adults,y=Minors, label = City))
+plot_2_b <- plot_2_b + geom_point(aes(color = Relligion))
+plot_2_b <- plot_2_b + ggtitle("Total accident-related injuries in town by age (2013-2019, yearly rate)")+
+geom_text_repel(aes(Adults, Minors, label = City), size = 3, max.overlaps = 18)
+plot_2_b <- plot_2_b +geom_abline(slope=slope)+theme(panel.border = element_rect(colour = "black", fill=NA, size=1))
+plot_2_b + scale_x_continuous() + scale_y_continuous() +theme(
+    legend.position = c(.95, .4),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+    legend.margin = margin(6, 6, 6, 6)
+    )
+```
+
+
+## 3. Freestyle analysis
+
+```{r}
+df_reverse <- df
+df_reverse[c(2,3,4,5,6,17,18,19,20)] <- lapply(df_reverse[c(2,3,4,5,6,17,18,19,20)], stringi::stri_reverse)
+```
+
+
+
+```{r}
+library(ggpubr)
+years <- ggplot(df_reverse, aes(x=Year,)) + geom_bar() +
+  scale_fill_hue(c = 40) +  theme(axis.text.x=element_text(angle=60, hjust=1)) + ggtitle("Accidents per year")
+
+dayNight<- ggplot(df_reverse, aes(x=Day_Night,)) + geom_bar() +
+  scale_fill_hue(c = 40) +  theme(axis.text.x=element_text(angle=60, hjust=1)) + ggtitle("Accidents per day or night")
+
+road_type<- ggplot(df_reverse, aes(x=Road_Type,)) + geom_bar() +
+  scale_fill_hue(c = 40) +  theme(axis.text.x=element_text(angle=60, hjust=1)) + ggtitle("Road type")
+
+severity<- ggplot(df_reverse, aes(x=Severity,)) + geom_bar() +
+  scale_fill_hue(c = 40) +  theme(axis.text.x=element_text(angle=60, hjust=1)) + ggtitle("Severity of accidents hist")
+
+ggarrange(dayNight, years, road_type , severity,
+          
+          ncol = 2, nrow = 2)
+
+
+type<- ggplot(df_reverse, aes(x=Type,)) + geom_bar() +
+  scale_fill_hue(c = 40) +  theme(axis.text.x=element_text(angle=60, hjust=1)) + ggtitle("Type of accidents")
+```
+
+From the above graphs we can infer some basic conclusion:
+- Most of the accidents happen during the day (could be interesting what is the severity ratio of day vs night) .
+- Most of the accidents are in the city (could be interesting what is the severity ratio of city vs NotCity)
+- Most of the accidents are with severity light
+- 2013 was the year with the highest accidents number between 2013-2020.
+
+
+It will be interesting to see if there are certain roads with alot of injuries
+
+```{r}
+most_injured_roads <- df_reverse %>% drop_na(Town_Name,Road_Name_1) %>% group_by(Town_Name,Road_Name_1) %>% summarise(n=n(), sum(Death), .groups = "drop") %>% set_colnames(c("Town_Name", "Road_Name_1", "n", "Death")) %>% arrange(desc(Death)) 
+most_injured_roads$full_road <- paste(most_injured_roads$Town_Name, most_injured_roads$Road_Name_1, sep=" ")
+ggplot(most_injured_roads[1:10,], aes(x=full_road, y=n, fill=Town_Name)) + geom_bar(stat='identity') +
+  scale_fill_hue(c = 40) +  theme(axis.text.x=element_text(angle=60, hjust=1)) + ggtitle("Highest Deaths per road")
+```
+
+Those are the top roads with deaths from a car accident across Israel. But this graph is not telling us the whole picture because all most these ways drive millions of people a year. actually we can see one interesting statistic and it about Moshe Street in Nesher. Though this is one of the main roads of north of Haifa, it still not major as roads in Tel Aviv and Jersualem. 
+This could be a good lead about that particular road.
+Also we can that Tel Aviv have much higher death statistics than the other cities.
+Jerusalem is the biggest city in israel and we got only one problematic road (maybe the deaths is more diverse in the roads of the city).
+
+
+## 4. Graphical Lineup - check the article
+
+### a. Produce a graphic that tries to answer this question from the data. The graph should show the total number of accidents per month summed over the years.
+
+```{r}
+ts <- df %>% group_by(D_month) %>% summarise(n=n())
+```
+
+
+```{r}
+D <- c(1:12)
+ggplot(ts) +geom_bar(aes(x=D_month, y=n), stat="identity") + scale_x_continuous("D", labels= as.character(D), breaks=D)+coord_cartesian(ylim = c(2000, 2800))  +ggtitle("Total number of accidents per month ") 
+```
+
+
+
+### b.  Produce 20 simulated data-sets based on the null hypothesis, and produce a graphic for each of them.
+
+We tried to simulate the data with poisson distribution when each month is a poisson random variable, but the graphs was not that similar to the real data. We choose to use a simple uniform distribution.
+
+
+```{r}
+ts_sim <- ts
+ts_sim$sim_num <- 1
+for (i in 2:20) {
+  tmp_ts <- ts
+  tmp_ts$n = runif(dim(ts)[1],min(ts$n), max(ts$n))
+  tmp_ts$sim_num <- i
+  ts_sim <- rbind(ts_sim, tmp_ts)
+}
+ts_sim$sim_num <- factor(ts_sim$sim_num) 
+# p <- ggplot(ts_sim, aes(x=Date, y=n))+geom_line()+facet_wrap(~sim_num) +ggtitle("Uniform estimation")
+p <- ggplot(ts_sim) +geom_bar(aes(x=D_month, y=n), stat="identity") + scale_x_continuous("D", labels= as.character(D), breaks=D) +ggtitle("Total number of accidents per month ")  +facet_wrap(~sim_num) +theme(axis.text.x=element_text(angle=60, hjust=,size = 6))+coord_cartesian(ylim = c(2000, 2800))
+p
+
+```
+
+### c.  Is it easy to tell apart the real data from the simulated ones? How is it different? What have we learned?
+
+We can see that most each month is pretty independent of the months, except from the 1st graph (the real data) which we can see some years the with a monotonic behavior (from May). All the other graphs are pretty independence, and in the real data we can see some lower months (Feb and April).
+We can reject the null hypothesis because the first graph seems to have a different, more dependent pattern between the months.
+
+
+
+## 5. PCA
+
+```{r}
+big_cities <- df %>% group_by(Town_Name) %>% summarise(n=n()) %>% filter(n>150) %>% drop_na(Town_Name)
+big_cities <- big_cities$Town_Name
+
+
+df_pca <- df[df$Town_Name %in% big_cities,]
+df_pca <- df_pca[c(7,8,9,11,12,13,19)]
+df_pca <- df_pca %>% group_by(Town_Name) %>% summarise_each(list(sum))
+
+df_pca <- column_to_rownames(df_pca, var = "Town_Name")
+
+```
+
+```{r}
+
+X <- df_pca
+
+prin_comp <- prcomp(X, rank. = 3)
+
+components <- prin_comp[["x"]]
+components <- data.frame(components)
+components$PC2 <- -components$PC2
+components$PC3 <- -components$PC3
+components = cbind(components, rownames(df_pca))
+
+tot_explained_variance_ratio <- summary(prin_comp)[["importance"]]['Proportion of Variance',]
+tot_explained_variance_ratio <- 100 * sum(tot_explained_variance_ratio)
+
+tit = "PCA on the cities with more than 150 accidents"
+
+fig <- plot_ly(components, x = ~PC1, y = ~PC2, z = ~PC3, color = ~df_pca$Death, colors = c('#636EFA','#EF553B','#00CC96') ) %>%
+  add_markers(size = 12) %>%
+  add_trace(text= rownames(df_pca))
+
+
+fig <- fig %>%
+  layout(
+    title = tit,
+    scene = list(bgcolor = "#e5ecf6")
+)
+
+fig
+```
+We can see that the smaller towns are clustered together, but the big cities are very far from each other.
+I dont think that we can say alot about the little towns that are cluster together (because perhpas they are cluster due to their size). 
+But the distance between each one of the big cities is interesting. Probably is due ti the different type of injuries in each one of the cities.
